@@ -1,0 +1,16 @@
+{
+  "name": "slytherin-telegram-bot",
+  "version": "1.0.0",
+  "description": "ربات مدیریت گروه تلگرام با شخصیت‌های تام ریدل و دن، متصل به Gemini API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3"
+  }
+}
