@@ -1,16 +1,16 @@
 {
-  "name": "slytherin-telegram-bot",
-  "version": "1.0.0",
-  "description": "ربات مدیریت گروه تلگرام با شخصیت‌های تام ریدل و دن، متصل به Gemini API",
+  "name": "rad-media-downloader",
+  "version": "2.0.0",
+  "description": "RadProtocol Telegram Media Downloader Bot with Force-Join & Multi-Platform Support",
   "main": "index.js",
   "scripts": {
+    "build": "curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp && chmod +x ./yt-dlp || true",
     "start": "node index.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "node-cron": "^3.0.3"
+    "express": "^4.22.3"
   }
 }
