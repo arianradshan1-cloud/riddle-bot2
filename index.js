@@ -408,21 +408,28 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-dl') {
-    const rawUrl = req.url.includes('url=') ? decodeURIComponent(req.url.split('url=')[1]) : 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    const client = req.url.includes('client=') ? req.url.split('client=')[1].split('&')[0] : 'android';
-    const { exec } = require('child_process');
-    exec(`./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --extractor-args "youtube:player_client=${client}" "${rawUrl}"`, { timeout: 35000 }, (err, stdout, stderr) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        client,
-        err: err ? err.message : null,
-        stderr: stderr || null,
-        stdoutLen: (stdout || '').length,
-        stdoutSample: (stdout || '').slice(0, 500)
-      }));
-    });
-    return;
+  if (req.method === 'GET' && parsedUrl === '/test-apis') {
+    const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+    const apis = [
+      `https://api.vkrdownloader.com/server?vkr=${encodeURIComponent(vidUrl)}`,
+      `https://delirius-apiofc.vercel.app/download/ytmp4?url=${encodeURIComponent(vidUrl)}`,
+      `https://api.ryzendesu.vip/api/downloader/ytmp4?url=${encodeURIComponent(vidUrl)}`,
+      `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(vidUrl)}`,
+      `https://api.agatz.xyz/api/ytmp4?url=${encodeURIComponent(vidUrl)}`
+    ];
+
+    const results = [];
+    for (const a of apis) {
+      try {
+        const r = await fetch(a, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000) });
+        const text = await r.text();
+        results.push({ api: a.split('?')[0], status: r.status, len: text.length, sample: text.slice(0, 150) });
+      } catch(e) {
+        results.push({ api: a.split('?')[0], err: e.message });
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(results, null, 2));
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {
