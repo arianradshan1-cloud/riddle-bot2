@@ -8,15 +8,48 @@ function getYtDlpPath() {
   return 'yt-dlp';
 }
 
-function runYtDlpJson(url) {
+function extractStreamUrl(item) {
+  if (!item) return null;
+  if (item.url) return item.url;
+  if (Array.isArray(item.formats) && item.formats.length > 0) {
+    const combined = item.formats
+      .filter(f => f.url && f.vcodec !== 'none' && f.acodec !== 'none')
+      .sort((a, b) => (b.height || 0) - (a.height || 0));
+    if (combined.length > 0) {
+      const p720 = combined.find(f => (f.height || 0) <= 720) || combined[0];
+      return p720.url;
+    }
+    const anyVid = item.formats
+      .filter(f => f.url && f.vcodec !== 'none')
+      .sort((a, b) => (b.height || 0) - (a.height || 0));
+    if (anyVid.length > 0) return anyVid[0].url;
+
+    const any = item.formats.filter(f => f.url);
+    if (any.length > 0) return any[0].url;
+  }
+  return null;
+}
+
+function runYtDlpJson(url, extraArgs = []) {
   return new Promise((resolve) => {
     const bin = getYtDlpPath();
+    const args = [
+      '-j',
+      '--no-playlist',
+      '--no-warnings',
+      '--socket-timeout', '20',
+      '-f', 'b[ext=mp4]/best[ext=mp4]/best',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      ...extraArgs,
+      url
+    ];
     execFile(
       bin,
-      ['-j', '--no-playlist', '--no-warnings', '--socket-timeout', '15', url],
-      { timeout: 35000, maxBuffer: 10 * 1024 * 1024 },
-      (err, stdout) => {
+      args,
+      { timeout: 45000, maxBuffer: 15 * 1024 * 1024 },
+      (err, stdout, stderr) => {
         if (err || !stdout) {
+          if (stderr) console.warn('[yt-dlp stderr]:', stderr.slice(0, 300));
           return resolve(null);
         }
         try {
@@ -142,31 +175,37 @@ async function downloadInstagram(url) {
       const photos = [];
       const videos = [];
       for (const item of ytdl) {
-        if (item.vcodec && item.vcodec !== 'none' && item.url) {
-          videos.push(item.url);
-        } else if (item.url) {
-          photos.push(item.url);
+        const streamUrl = extractStreamUrl(item);
+        if (streamUrl) {
+          const isVid = item.vcodec && item.vcodec !== 'none';
+          if (isVid) videos.push(streamUrl);
+          else photos.push(streamUrl);
         }
       }
-      return {
-        platform: 'instagram',
-        type: 'carousel',
-        title: (ytdl[0] && ytdl[0].title) || 'Instagram Carousel',
-        author: (ytdl[0] && ytdl[0].uploader) || 'Instagram User',
-        photos: photos,
-        videos: videos
-      };
-    } else if (ytdl.url) {
-      const isVideo = ytdl.vcodec && ytdl.vcodec !== 'none';
-      return {
-        platform: 'instagram',
-        type: isVideo ? 'video' : 'photo',
-        title: ytdl.description || ytdl.title || 'Instagram Post',
-        author: ytdl.uploader || 'Instagram User',
-        videoUrl: isVideo ? ytdl.url : null,
-        photoUrl: !isVideo ? ytdl.url : null,
-        cover: ytdl.thumbnail
-      };
+      if (photos.length > 0 || videos.length > 0) {
+        return {
+          platform: 'instagram',
+          type: 'carousel',
+          title: (ytdl[0] && ytdl[0].title) || 'Instagram Carousel',
+          author: (ytdl[0] && ytdl[0].uploader) || 'Instagram User',
+          photos: photos,
+          videos: videos
+        };
+      }
+    } else {
+      const streamUrl = extractStreamUrl(ytdl);
+      if (streamUrl) {
+        const isVideo = (ytdl.vcodec && ytdl.vcodec !== 'none') || (ytdl.ext === 'mp4');
+        return {
+          platform: 'instagram',
+          type: isVideo ? 'video' : 'photo',
+          title: ytdl.description || ytdl.title || 'Instagram Post',
+          author: ytdl.uploader || 'Instagram User',
+          videoUrl: isVideo ? streamUrl : null,
+          photoUrl: !isVideo ? streamUrl : null,
+          cover: ytdl.thumbnail
+        };
+      }
     }
   }
 
@@ -197,18 +236,21 @@ async function downloadInstagram(url) {
 
 // 4. YouTube Downloader (Shorts & Videos)
 async function downloadYouTube(url) {
-  // First attempt: yt-dlp with direct 720p extraction
+  // First attempt: yt-dlp with direct extraction
   const ytdl = await runYtDlpJson(url);
-  if (ytdl && ytdl.url) {
-    return {
-      platform: 'youtube',
-      type: 'video',
-      title: ytdl.title || 'YouTube Video',
-      author: ytdl.uploader || 'YouTube Channel',
-      videoUrl: ytdl.url,
-      cover: ytdl.thumbnail,
-      duration: ytdl.duration
-    };
+  if (ytdl) {
+    const streamUrl = extractStreamUrl(ytdl);
+    if (streamUrl) {
+      return {
+        platform: 'youtube',
+        type: 'video',
+        title: ytdl.title || 'YouTube Video',
+        author: ytdl.uploader || 'YouTube Channel',
+        videoUrl: streamUrl,
+        cover: ytdl.thumbnail,
+        duration: ytdl.duration
+      };
+    }
   }
 
   // Second attempt: Invidious API

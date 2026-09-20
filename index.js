@@ -395,7 +395,7 @@ async function handleUpdate(update) {
 }
 
 // HTTP Server (Native Node.js - Zero External Dependencies)
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const parsedUrl = (req.url || '/').split('?')[0];
 
   if (req.method === 'GET' && (parsedUrl === '/' || parsedUrl === '/health')) {
@@ -408,12 +408,16 @@ const server = http.createServer((req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/debug') {
-    const { exec } = require('child_process');
-    exec('which python3; which node; ls -la ./yt-dlp; ./yt-dlp --version', (err, stdout, stderr) => {
+  if (req.method === 'GET' && parsedUrl === '/test-dl') {
+    const rawUrl = req.url.includes('url=') ? decodeURIComponent(req.url.split('url=')[1]) : 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+    try {
+      const resData = await downloader.downloadMedia(rawUrl);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ stdout, stderr, err: err ? err.message : null }));
-    });
+      res.end(JSON.stringify({ success: !!resData, data: resData }));
+    } catch(err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
