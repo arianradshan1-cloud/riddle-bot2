@@ -327,6 +327,30 @@ async function handleUpdate(update) {
               if (statusMsgId) await bot.deleteMessage(chatId, statusMsgId);
               return;
             }
+
+            console.warn('sendVideo failed with URL, trying direct link button fallback:', sendRes?.description);
+            // Fallback for large files (>20MB) or IP-restricted URLs: Send Direct Download Button!
+            const downloadMarkup = {
+              inline_keyboard: [
+                [{ text: '📥 دانلود مستقیم ویدیو (با کیفیت اصلی)', url: result.videoUrl }],
+                ...(replyMarkup && replyMarkup.inline_keyboard ? replyMarkup.inline_keyboard : [])
+              ]
+            };
+
+            if (statusMsgId) {
+              await bot.editMessageText(
+                chatId,
+                statusMsgId,
+                `🎬 <b>${result.title || 'ویدیو با موفقیت استخراج شد'}</b>\n\n` +
+                `👤 <b>ارسال‌کننده:</b> ${result.author || 'ناشناس'}\n` +
+                `📦 <b>پلتفرم:</b> ${result.platform.toUpperCase()}\n\n` +
+                `⚠️ <i>به دلیل محدودیت حجم تلگرام برای این فایل (بیش از ۲۰ مگابایت)، لینک مستقیم دانلود با بالاترین کیفیت آماده شد:</i>\n\n` +
+                `👇 <b>برای دانلود یا تماشا روی دکمه زیر کلیک کنید:</b>`,
+                { reply_markup: downloadMarkup }
+              );
+              db.recordDownload(userId, result.platform);
+              return;
+            }
           }
 
           // Send Photo
