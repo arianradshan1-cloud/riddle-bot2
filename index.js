@@ -408,21 +408,6 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-cobalt-list') {
-    try {
-      const r = await fetch('https://instances.cobalt.best/api/instances.json', { signal: AbortSignal.timeout(10000) });
-      const list = await r.json();
-      // Filter instances without auth
-      const open = list.filter(i => i.cors && !i.auth);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ total: list.length, openCount: open.length, sampleOpen: open.slice(0, 10) }, null, 2));
-    } catch(e) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ err: e.message }));
-    }
-    return;
-  }
-
   if (req.method === 'POST' && parsedUrl === '/webhook') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
