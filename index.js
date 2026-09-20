@@ -408,25 +408,36 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-f5') {
-    const vidId = 'vbW6W9cKM84';
-    try {
-      const r = await fetch(`https://invidious.f5.si/api/v1/videos/${vidId}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        signal: AbortSignal.timeout(10000)
-      });
-      const data = await r.json();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        title: data.title,
-        streamsCount: (data.formatStreams || []).length,
-        firstStream: (data.formatStreams || [])[0]
-      }, null, 2));
-    } catch(e) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ err: e.message }));
+  if (req.method === 'GET' && parsedUrl === '/test-cobalt') {
+    const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+    const instances = [
+      'https://cobalt-backend.canine.tools/',
+      'https://capi.3kh0.net/',
+      'https://cobalt-api.meowing.de/',
+      'https://kityune.imput.net/',
+      'https://nachos.imput.net/'
+    ];
+
+    const results = [];
+    for (const inst of instances) {
+      try {
+        const r = await fetch(inst, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ url: vidUrl }),
+          signal: AbortSignal.timeout(8000)
+        });
+        const d = await r.json();
+        results.push({ inst, status: r.status, ok: r.ok, d });
+      } catch(e) {
+        results.push({ inst, err: e.message });
+      }
     }
-    return;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(results, null, 2));
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {
