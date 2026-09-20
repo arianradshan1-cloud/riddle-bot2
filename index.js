@@ -410,25 +410,22 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && parsedUrl === '/test-clients') {
     const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    const clients = ['mweb', 'tv', 'tv_embedded', 'creator', 'android_creator'];
     const { exec } = require('child_process');
 
-    const results = {};
-    for (const c of clients) {
-      await new Promise(res => {
-        exec(`./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --extractor-args "youtube:player_client=${c}" "${vidUrl}"`, { timeout: 20000 }, (err, stdout, stderr) => {
-          results[c] = {
-            ok: !err && stdout.length > 0,
-            err: err ? (stderr || err.message).slice(0, 150) : null,
-            stdoutLen: stdout.length
-          };
-          res();
-        });
-      });
-    }
+    const nodePath = process.execPath; // e.g. /opt/render/project/nodes/node-26.9.0/bin/node
+    const cmd = `./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --js-runtimes "node:${nodePath}" "${vidUrl}"`;
 
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(results, null, 2));
+    exec(cmd, { timeout: 25000 }, (err, stdout, stderr) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        nodePath,
+        ok: !err && stdout.length > 0,
+        stderr: stderr || null,
+        stdoutLen: stdout.length,
+        title: stdout.length > 0 ? (JSON.parse(stdout).title) : null
+      }, null, 2));
+    });
+    return;
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {
