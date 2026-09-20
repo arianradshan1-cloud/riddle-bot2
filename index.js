@@ -404,8 +404,23 @@ const server = http.createServer(async (req, res) => {
       status: 'online',
       service: 'RadProtocol Downloader Bot',
       version: '2.0.0',
-      uptime: `${Math.floor(process.uptime())}s`
+      uptime: `${Math.floor(process.uptime())}s`,
+      hasCookies: !!(process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim()),
+      cookiesLen: (process.env.YOUTUBE_COOKIES || '').length
     }));
+  }
+
+  if (req.method === 'GET' && parsedUrl === '/debug-yt') {
+    const rawUrl = req.url.includes('url=') ? decodeURIComponent(req.url.split('url=')[1]) : 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+    try {
+      const data = await downloader.downloadYouTube(rawUrl);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: !!data, data }, null, 2));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message, stack: e.stack }));
+    }
+    return;
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {
