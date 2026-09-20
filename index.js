@@ -410,10 +410,12 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && parsedUrl === '/test-dl') {
     const rawUrl = req.url.includes('url=') ? decodeURIComponent(req.url.split('url=')[1]) : 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+    const client = req.url.includes('client=') ? req.url.split('client=')[1].split('&')[0] : 'android';
     const { exec } = require('child_process');
-    exec(`./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --extractor-args "youtube:player_client=ios,android,web" "${rawUrl}"`, { timeout: 35000 }, (err, stdout, stderr) => {
+    exec(`./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --extractor-args "youtube:player_client=${client}" "${rawUrl}"`, { timeout: 35000 }, (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
+        client,
         err: err ? err.message : null,
         stderr: stderr || null,
         stdoutLen: (stdout || '').length,
