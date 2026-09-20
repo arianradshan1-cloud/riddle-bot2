@@ -408,36 +408,19 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-cobalt') {
-    const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    const instances = [
-      'https://cobalt-backend.canine.tools/',
-      'https://capi.3kh0.net/',
-      'https://cobalt-api.meowing.de/',
-      'https://kityune.imput.net/',
-      'https://nachos.imput.net/'
-    ];
-
-    const results = [];
-    for (const inst of instances) {
-      try {
-        const r = await fetch(inst, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ url: vidUrl }),
-          signal: AbortSignal.timeout(8000)
-        });
-        const d = await r.json();
-        results.push({ inst, status: r.status, ok: r.ok, d });
-      } catch(e) {
-        results.push({ inst, err: e.message });
-      }
+  if (req.method === 'GET' && parsedUrl === '/test-cobalt-list') {
+    try {
+      const r = await fetch('https://instances.cobalt.best/api/instances.json', { signal: AbortSignal.timeout(10000) });
+      const list = await r.json();
+      // Filter instances without auth
+      const open = list.filter(i => i.cors && !i.auth);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ total: list.length, openCount: open.length, sampleOpen: open.slice(0, 10) }, null, 2));
+    } catch(e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ err: e.message }));
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(results, null, 2));
+    return;
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {
