@@ -410,16 +410,27 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/debug-yt') {
-    const rawUrl = req.url.includes('url=') ? decodeURIComponent(req.url.split('url=')[1]) : 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    try {
-      const data = await downloader.downloadYouTube(rawUrl);
+  if (req.method === 'GET' && parsedUrl === '/debug-raw') {
+    const rawUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+    const { exec } = require('child_process');
+    const path = require('path');
+    const fs = require('fs');
+    const cookieFile = path.join(__dirname, 'cookies.txt');
+    const cookieExists = fs.existsSync(cookieFile);
+    const cookieContent = cookieExists ? fs.readFileSync(cookieFile, 'utf-8') : '';
+    const cmd = `./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --js-runtimes "node:${process.execPath}" --cookies "${cookieFile}" "${rawUrl}"`;
+    exec(cmd, { timeout: 35000 }, (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: !!data, data }, null, 2));
-    } catch (e) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: e.message, stack: e.stack }));
-    }
+      res.end(JSON.stringify({
+        cookieFile,
+        cookieExists,
+        cookieFirstLine: cookieContent.slice(0, 150),
+        err: err ? err.message : null,
+        stderr: stderr || null,
+        stdoutLen: (stdout || '').length,
+        stdoutSample: (stdout || '').slice(0, 400)
+      }, null, 2));
+    });
     return;
   }
 
