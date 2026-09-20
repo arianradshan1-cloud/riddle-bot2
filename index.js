@@ -408,18 +408,16 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-ig') {
-    const igUrl = 'https://www.instagram.com/reel/C8q_zTqI3Vw/';
-    const { exec } = require('child_process');
-    exec(`./yt-dlp -j --no-playlist "${igUrl}"`, { timeout: 25000 }, (err, stdout, stderr) => {
+  if (req.method === 'GET' && parsedUrl === '/test-tiktok') {
+    const ttUrl = 'https://www.tiktok.com/@tiktok/video/7106594312292453675';
+    try {
+      const data = await downloader.downloadTikTok(ttUrl);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        ok: !err && stdout.length > 0,
-        stderr: stderr || null,
-        stdoutLen: stdout.length,
-        data: stdout.length > 0 ? JSON.parse(stdout) : null
-      }, null, 2));
-    });
+      res.end(JSON.stringify({ ok: !!data, data }, null, 2));
+    } catch(err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, err: err.message }));
+    }
     return;
   }
 
