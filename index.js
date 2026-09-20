@@ -408,15 +408,23 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-tiktok') {
-    const ttUrl = 'https://www.tiktok.com/@tiktok/video/7106594312292453675';
+  if (req.method === 'GET' && parsedUrl === '/test-f5') {
+    const vidId = 'vbW6W9cKM84';
     try {
-      const data = await downloader.downloadTikTok(ttUrl);
+      const r = await fetch(`https://invidious.f5.si/api/v1/videos/${vidId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(10000)
+      });
+      const data = await r.json();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: !!data, data }, null, 2));
-    } catch(err) {
+      res.end(JSON.stringify({
+        title: data.title,
+        streamsCount: (data.formatStreams || []).length,
+        firstStream: (data.formatStreams || [])[0]
+      }, null, 2));
+    } catch(e) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: false, err: err.message }));
+      res.end(JSON.stringify({ err: e.message }));
     }
     return;
   }
