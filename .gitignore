@@ -4,4 +4,7 @@ node_modules/
 data/
 *.log
 yt-dlp
+cookies.txt
+*.cookie
+*.cookies
 .DS_Store

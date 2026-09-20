@@ -8,6 +8,20 @@ function getYtDlpPath() {
   return 'yt-dlp';
 }
 
+function getCookieFilePath() {
+  const cookieFile = path.join(__dirname, 'cookies.txt');
+  if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim()) {
+    try {
+      fs.writeFileSync(cookieFile, process.env.YOUTUBE_COOKIES.trim());
+      return cookieFile;
+    } catch (e) {
+      console.warn('Failed to write cookies from env:', e.message);
+    }
+  }
+  if (fs.existsSync(cookieFile)) return cookieFile;
+  return null;
+}
+
 function extractStreamUrl(item) {
   if (!item) return null;
   if (item.url) return item.url;
@@ -33,6 +47,7 @@ function extractStreamUrl(item) {
 function runYtDlpJson(url, extraArgs = []) {
   return new Promise((resolve) => {
     const bin = getYtDlpPath();
+    const cookiePath = getCookieFilePath();
     const args = [
       '-j',
       '--no-playlist',
@@ -40,6 +55,7 @@ function runYtDlpJson(url, extraArgs = []) {
       '--socket-timeout', '20',
       '-f', 'b[ext=mp4]/best[ext=mp4]/best',
       '--extractor-args', 'youtube:player_client=ios,android,web',
+      ...(cookiePath ? ['--cookies', cookiePath] : []),
       ...extraArgs,
       url
     ];
