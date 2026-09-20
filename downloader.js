@@ -13,8 +13,10 @@ function getCookieFilePath() {
   if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim()) {
     try {
       let content = process.env.YOUTUBE_COOKIES.trim();
+      // Remove any markdown blockquotes, backticks, leading/trailing symbols from paste
+      content = content.replace(/^[>`"'\s]+/, '').replace(/[>`"'\s]+$/, '');
       if (content.startsWith('base64:')) {
-        content = Buffer.from(content.slice(7), 'base64').toString('utf-8');
+        content = Buffer.from(content.slice(7).trim(), 'base64').toString('utf-8');
       } else if (content.includes('\\n') && !content.includes('\n')) {
         content = content.replace(/\\n/g, '\n');
       }

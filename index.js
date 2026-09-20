@@ -404,39 +404,8 @@ const server = http.createServer(async (req, res) => {
       status: 'online',
       service: 'RadProtocol Downloader Bot',
       version: '2.0.0',
-      uptime: `${Math.floor(process.uptime())}s`,
-      hasCookies: !!(process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim()),
-      cookiesLen: (process.env.YOUTUBE_COOKIES || '').length
+      uptime: `${Math.floor(process.uptime())}s`
     }));
-  }
-
-  if (req.method === 'GET' && parsedUrl === '/debug-raw') {
-    const rawUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    const { exec } = require('child_process');
-    const path = require('path');
-    const fs = require('fs');
-    const cookiePath = downloader.getCookieFilePath ? downloader.getCookieFilePath() : path.join(__dirname, 'cookies.txt');
-    const rawEnv = process.env.YOUTUBE_COOKIES || '';
-    const cookieFile = path.join(__dirname, 'cookies.txt');
-    const cookieExists = fs.existsSync(cookieFile);
-    const cookieContent = cookieExists ? fs.readFileSync(cookieFile, 'utf-8') : '';
-    const cmd = `./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --js-runtimes "node:${process.execPath}" --cookies "${cookieFile}" "${rawUrl}"`;
-    exec(cmd, { timeout: 35000 }, (err, stdout, stderr) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        rawEnvLen: rawEnv.length,
-        rawEnvStart: rawEnv.slice(0, 40),
-        cookiePath,
-        cookieExists,
-        cookieSize: cookieContent.length,
-        cookieFirstLine: cookieContent.slice(0, 150),
-        err: err ? err.message : null,
-        stderr: stderr || null,
-        stdoutLen: (stdout || '').length,
-        stdoutSample: (stdout || '').slice(0, 400)
-      }, null, 2));
-    });
-    return;
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {
