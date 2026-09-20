@@ -32,7 +32,6 @@ function getCookieFilePath() {
 
 function extractStreamUrl(item) {
   if (!item) return null;
-  if (item.url) return item.url;
   if (Array.isArray(item.formats) && item.formats.length > 0) {
     const combined = item.formats
       .filter(f => f.url && f.vcodec !== 'none' && f.acodec !== 'none')
@@ -49,6 +48,7 @@ function extractStreamUrl(item) {
     const any = item.formats.filter(f => f.url);
     if (any.length > 0) return any[0].url;
   }
+  if (item.url) return item.url;
   return null;
 }
 
@@ -63,8 +63,6 @@ function runYtDlpJson(url, extraArgs = []) {
       '--no-warnings',
       '--socket-timeout', '25',
       '--js-runtimes', `node:${nodeBin}`,
-      '-f', 'b[ext=mp4]/best[ext=mp4]/best',
-      '--extractor-args', 'youtube:player_client=ios,android,web',
       ...(cookiePath ? ['--cookies', cookiePath] : []),
       ...extraArgs,
       url
