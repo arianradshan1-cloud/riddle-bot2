@@ -431,11 +431,29 @@ app.listen(PORT, async () => {
     console.log(`🔗 Setting Telegram Webhook to: ${webhookUrl}`);
     const whRes = await bot.setWebhook(webhookUrl);
     console.log('Webhook result:', whRes);
+
+    // Self-Ping Keep-Alive to prevent Render free-tier sleep
+    initKeepAlive(renderUrl);
   } else {
     console.log('⚡️ No Webhook URL detected; starting long polling mode...');
     startPolling();
   }
 });
+
+// Self-Ping to prevent Render free-tier from sleeping (Pings every 10 minutes)
+function initKeepAlive(url) {
+  const targetUrl = url.replace(/\/$/, '') + '/';
+  const INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+  console.log(`⏱ Keep-Alive system active: Pinging ${targetUrl} every 10 minutes`);
+  setInterval(async () => {
+    try {
+      const res = await fetch(targetUrl);
+      console.log(`[Keep-Alive] Ping to ${targetUrl} successful (Status: ${res.status})`);
+    } catch (err) {
+      console.warn(`[Keep-Alive] Ping failed: ${err.message}`);
+    }
+  }, INTERVAL_MS);
+}
 
 // Fallback Long Polling (for local dev / non-webhook environments)
 async function startPolling() {
