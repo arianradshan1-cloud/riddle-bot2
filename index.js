@@ -408,26 +408,25 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-apis') {
+  if (req.method === 'GET' && parsedUrl === '/test-clients') {
     const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    const apis = [
-      `https://api.vkrdownloader.com/server?vkr=${encodeURIComponent(vidUrl)}`,
-      `https://delirius-apiofc.vercel.app/download/ytmp4?url=${encodeURIComponent(vidUrl)}`,
-      `https://api.ryzendesu.vip/api/downloader/ytmp4?url=${encodeURIComponent(vidUrl)}`,
-      `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(vidUrl)}`,
-      `https://api.agatz.xyz/api/ytmp4?url=${encodeURIComponent(vidUrl)}`
-    ];
+    const clients = ['mweb', 'tv', 'tv_embedded', 'creator', 'android_creator'];
+    const { exec } = require('child_process');
 
-    const results = [];
-    for (const a of apis) {
-      try {
-        const r = await fetch(a, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000) });
-        const text = await r.text();
-        results.push({ api: a.split('?')[0], status: r.status, len: text.length, sample: text.slice(0, 150) });
-      } catch(e) {
-        results.push({ api: a.split('?')[0], err: e.message });
-      }
+    const results = {};
+    for (const c of clients) {
+      await new Promise(res => {
+        exec(`./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --extractor-args "youtube:player_client=${c}" "${vidUrl}"`, { timeout: 20000 }, (err, stdout, stderr) => {
+          results[c] = {
+            ok: !err && stdout.length > 0,
+            err: err ? (stderr || err.message).slice(0, 150) : null,
+            stdoutLen: stdout.length
+          };
+          res();
+        });
+      });
     }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(results, null, 2));
   }
