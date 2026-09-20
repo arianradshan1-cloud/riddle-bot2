@@ -410,14 +410,16 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && parsedUrl === '/test-dl') {
     const rawUrl = req.url.includes('url=') ? decodeURIComponent(req.url.split('url=')[1]) : 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    try {
-      const resData = await downloader.downloadMedia(rawUrl);
+    const { exec } = require('child_process');
+    exec(`./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --extractor-args "youtube:player_client=ios,android,web" "${rawUrl}"`, { timeout: 35000 }, (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: !!resData, data: resData }));
-    } catch(err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
+      res.end(JSON.stringify({
+        err: err ? err.message : null,
+        stderr: stderr || null,
+        stdoutLen: (stdout || '').length,
+        stdoutSample: (stdout || '').slice(0, 500)
+      }));
+    });
     return;
   }
 
