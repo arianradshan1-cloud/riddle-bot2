@@ -408,6 +408,15 @@ const server = http.createServer((req, res) => {
     }));
   }
 
+  if (req.method === 'GET' && parsedUrl === '/debug') {
+    const { exec } = require('child_process');
+    exec('which python3; which node; ls -la ./yt-dlp; ./yt-dlp --version', (err, stdout, stderr) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ stdout, stderr, err: err ? err.message : null }));
+    });
+    return;
+  }
+
   if (req.method === 'POST' && parsedUrl === '/webhook') {
     let body = '';
     req.on('data', chunk => { body += chunk; });

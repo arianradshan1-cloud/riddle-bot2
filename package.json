@@ -4,7 +4,7 @@
   "description": "RadProtocol Telegram Media Downloader Bot with Force-Join & Multi-Platform Support",
   "main": "index.js",
   "scripts": {
-    "build": "curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp && chmod +x ./yt-dlp || true",
+    "build": "curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o ./yt-dlp && chmod +x ./yt-dlp || true",
     "start": "node index.js"
   },
   "engines": {
