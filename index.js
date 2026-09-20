@@ -398,36 +398,14 @@ async function handleUpdate(update) {
 const server = http.createServer(async (req, res) => {
   const parsedUrl = (req.url || '/').split('?')[0];
 
-  if (req.method === 'GET' && parsedUrl === '/test-cobalt-live') {
-    const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
-    const hosts = [
-      'https://melon.clxxped.lol',
-      'https://lime.clxxped.lol',
-      'https://apicobalt.mgytr.top',
-      'https://kitty.tame.gg',
-      'https://cobalt-api.lamps-dev.dev'
-    ];
-    const results = [];
-    for (const h of hosts) {
-      try {
-        const r = await fetch(h, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ url: vidUrl }),
-          signal: AbortSignal.timeout(6000)
-        });
-        const d = await r.json();
-        results.push({ host: h, status: r.status, ok: r.ok, d });
-      } catch (e) {
-        results.push({ host: h, err: e.message });
-      }
-    }
+  if (req.method === 'GET' && (parsedUrl === '/' || parsedUrl === '/health')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(results, null, 2));
-    return;
+    return res.end(JSON.stringify({
+      status: 'online',
+      service: 'RadProtocol Downloader Bot',
+      version: '2.0.0',
+      uptime: `${Math.floor(process.uptime())}s`
+    }));
   }
 
   if (req.method === 'POST' && parsedUrl === '/webhook') {

@@ -12,7 +12,13 @@ function getCookieFilePath() {
   const cookieFile = path.join(__dirname, 'cookies.txt');
   if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim()) {
     try {
-      fs.writeFileSync(cookieFile, process.env.YOUTUBE_COOKIES.trim());
+      let content = process.env.YOUTUBE_COOKIES.trim();
+      if (content.startsWith('base64:')) {
+        content = Buffer.from(content.slice(7), 'base64').toString('utf-8');
+      } else if (content.includes('\\n') && !content.includes('\n')) {
+        content = content.replace(/\\n/g, '\n');
+      }
+      fs.writeFileSync(cookieFile, content, 'utf-8');
       return cookieFile;
     } catch (e) {
       console.warn('Failed to write cookies from env:', e.message);
@@ -48,11 +54,13 @@ function runYtDlpJson(url, extraArgs = []) {
   return new Promise((resolve) => {
     const bin = getYtDlpPath();
     const cookiePath = getCookieFilePath();
+    const nodeBin = process.execPath || 'node';
     const args = [
       '-j',
       '--no-playlist',
       '--no-warnings',
-      '--socket-timeout', '20',
+      '--socket-timeout', '25',
+      '--js-runtimes', `node:${nodeBin}`,
       '-f', 'b[ext=mp4]/best[ext=mp4]/best',
       '--extractor-args', 'youtube:player_client=ios,android,web',
       ...(cookiePath ? ['--cookies', cookiePath] : []),
