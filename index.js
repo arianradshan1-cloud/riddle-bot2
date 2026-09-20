@@ -1,4 +1,4 @@
-const express = require('express');
+const http = require('http');
 const TelegramBot = require('./telegram');
 const downloader = require('./downloader');
 const db = require('./db');
@@ -16,8 +16,6 @@ const ADMIN_IDS = (process.env.ADMIN_ID || '').split(',').map(s => s.trim()).fil
 const PORT = process.env.PORT || 3000;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
-const app = express();
-app.use(express.json());
 
 // Initialize Database
 db.initDb();
@@ -396,25 +394,44 @@ async function handleUpdate(update) {
   }
 }
 
-// Express Server Endpoints
-app.get('/', (req, res) => {
-  res.json({
-    status: 'online',
-    service: 'RadProtocol Downloader Bot',
-    version: '2.0.0',
-    uptime: `${Math.floor(process.uptime())}s`
-  });
-});
+// HTTP Server (Native Node.js - Zero External Dependencies)
+const server = http.createServer((req, res) => {
+  const parsedUrl = (req.url || '/').split('?')[0];
 
-app.post('/webhook', (req, res) => {
-  res.sendStatus(200);
-  if (req.body) {
-    handleUpdate(req.body);
+  if (req.method === 'GET' && (parsedUrl === '/' || parsedUrl === '/health')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      status: 'online',
+      service: 'RadProtocol Downloader Bot',
+      version: '2.0.0',
+      uptime: `${Math.floor(process.uptime())}s`
+    }));
   }
+
+  if (req.method === 'POST' && parsedUrl === '/webhook') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      try {
+        if (body && body.trim()) {
+          const update = JSON.parse(body);
+          handleUpdate(update);
+        }
+      } catch (err) {
+        console.error('Invalid webhook JSON payload:', err.message);
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('Not Found');
 });
 
 // Start Service
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
   console.log(`🚀 Server listening on port ${PORT}`);
 
   const botInfo = await bot.getMe();
