@@ -415,6 +415,8 @@ const server = http.createServer(async (req, res) => {
     const { exec } = require('child_process');
     const path = require('path');
     const fs = require('fs');
+    const cookiePath = downloader.getCookieFilePath ? downloader.getCookieFilePath() : path.join(__dirname, 'cookies.txt');
+    const rawEnv = process.env.YOUTUBE_COOKIES || '';
     const cookieFile = path.join(__dirname, 'cookies.txt');
     const cookieExists = fs.existsSync(cookieFile);
     const cookieContent = cookieExists ? fs.readFileSync(cookieFile, 'utf-8') : '';
@@ -422,8 +424,11 @@ const server = http.createServer(async (req, res) => {
     exec(cmd, { timeout: 35000 }, (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        cookieFile,
+        rawEnvLen: rawEnv.length,
+        rawEnvStart: rawEnv.slice(0, 40),
+        cookiePath,
         cookieExists,
+        cookieSize: cookieContent.length,
         cookieFirstLine: cookieContent.slice(0, 150),
         err: err ? err.message : null,
         stderr: stderr || null,

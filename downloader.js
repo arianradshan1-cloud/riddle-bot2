@@ -383,5 +383,6 @@ module.exports = {
   downloadTwitter,
   downloadInstagram,
   downloadYouTube,
-  downloadPinterest
+  downloadPinterest,
+  getCookieFilePath
 };
