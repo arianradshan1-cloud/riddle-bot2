@@ -408,21 +408,16 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  if (req.method === 'GET' && parsedUrl === '/test-clients') {
-    const vidUrl = 'https://www.youtube.com/watch?v=vbW6W9cKM84';
+  if (req.method === 'GET' && parsedUrl === '/test-ig') {
+    const igUrl = 'https://www.instagram.com/reel/C8q_zTqI3Vw/';
     const { exec } = require('child_process');
-
-    const nodePath = process.execPath; // e.g. /opt/render/project/nodes/node-26.9.0/bin/node
-    const cmd = `./yt-dlp -j --no-playlist -f "b[ext=mp4]/best[ext=mp4]/best" --js-runtimes "node:${nodePath}" "${vidUrl}"`;
-
-    exec(cmd, { timeout: 25000 }, (err, stdout, stderr) => {
+    exec(`./yt-dlp -j --no-playlist "${igUrl}"`, { timeout: 25000 }, (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        nodePath,
         ok: !err && stdout.length > 0,
         stderr: stderr || null,
         stdoutLen: stdout.length,
-        title: stdout.length > 0 ? (JSON.parse(stdout).title) : null
+        data: stdout.length > 0 ? JSON.parse(stdout) : null
       }, null, 2));
     });
     return;
