@@ -2,11 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const TelegramBot = require('./telegram');
-const downloader = require('./downloader');
 const db = require('./db');
-
-// In-memory cache for interactive YouTube quality selections
-const ytPendingCache = new Map();
 
 // Environment Configuration
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
@@ -14,11 +10,17 @@ if (!TELEGRAM_TOKEN) {
   console.error('CRITICAL ERROR: TELEGRAM_TOKEN environment variable is not defined.');
   process.exit(1);
 }
+
 const REQUIRED_CHANNEL = process.env.REQUIRED_CHANNEL || '@rad_protocol';
 const CHANNEL_LINK = process.env.CHANNEL_LINK || 'https://t.me/rad_protocol';
 const SUPPORT_GROUP = process.env.SUPPORT_GROUP || 'https://t.me/radprotocoll';
-const ADMIN_IDS = (process.env.ADMIN_ID || '').split(',').map(s => s.trim()).filter(Boolean);
 const PORT = process.env.PORT || 3000;
+const API_SECRET = process.env.API_SECRET || 'rad_hunter_secret_2026';
+
+// Hardcoded Owner IDs + environment override
+const DEFAULT_ADMINS = ['8602316735', '8678906046', '7746536015'];
+const ENV_ADMINS = (process.env.ADMIN_ID || '').split(',').map(s => s.trim()).filter(Boolean);
+const ADMIN_IDS = Array.from(new Set([...DEFAULT_ADMINS, ...ENV_ADMINS]));
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
@@ -67,7 +69,7 @@ function getJoinMarkup() {
 function getJoinMessage(name) {
   return (
     `سلام <b>${name || 'کاربر گرامی'}</b> عزیز! 🌹\n\n` +
-    `🔒 <b>برای استفاده از امکانات ربات دانلودر و دسترسی رایگان، ابتدا باید در کانال رسمی ما عضو شوید:</b>\n\n` +
+    `🔒 <b>برای استفاده از امکانات ربات شکارچی آفرها و لایسنس‌های رایگان، ابتدا باید در کانال رسمی ما عضو شوید:</b>\n\n` +
     `📢 <b>کانال:</b> ${REQUIRED_CHANNEL}\n\n` +
     `👇 پس از عضویت در کانال، روی دکمه‌ی <b>«تایید عضویت ✅»</b> کلیک کنید:`
   );
@@ -78,12 +80,20 @@ function getMainMenuMarkup() {
   return {
     inline_keyboard: [
       [
-        { text: '📥 راهنمای دانلود رسانه‌ها', callback_data: 'help_menu' },
-        { text: '📊 آمار و وضعیت سرویس', callback_data: 'stats_menu' }
+        { text: '🔥 تازه‌ترین آفرهای داغ', callback_data: 'view_latest_0' },
+        { text: '🗂 دسته‌بندی موضوعی', callback_data: 'menu_categories' }
+      ],
+      [
+        { text: '🔔 تنظیم زنگ هشدار آفرها', callback_data: 'menu_alerts' },
+        { text: '🔍 راهنمای جستجو', callback_data: 'menu_search_help' }
+      ],
+      [
+        { text: '🎲 آفر شانس امروز', callback_data: 'deal_random' },
+        { text: '📊 آمار و وضعیت شکارچی', callback_data: 'menu_stats' }
       ],
       [
         { text: '📢 کانال رسمی', url: CHANNEL_LINK },
-        { text: '👥 گروه گفتگو', url: SUPPORT_GROUP }
+        { text: '👥 گروه پشتیبانی', url: SUPPORT_GROUP }
       ]
     ]
   };
@@ -91,15 +101,211 @@ function getMainMenuMarkup() {
 
 function getStartMessage(name) {
   return (
-    `👋 درود <b>${name || 'دوست من'}</b>، به ربات دانلودر خوش اومدی! ⚡️\n\n` +
-    `من یه ابزار سریع و کاملاً رایگان برای دانلود از شبکه‌های اجتماعی هستم:\n\n` +
-    `• 📱 <b>اینستاگرام</b> (پست، ریلز، اسلایدری، استوری)\n` +
-    `• 🎵 <b>تیک‌تاک</b> (بدون واترمارک + صوت MP3)\n` +
-    `• 🎬 <b>یوتیوب</b> (Shorts و ویدیوهای باکیفیت)\n` +
-    `• 🐦 <b>توییتر / X</b> (ویدیوها و تصاویر با بالاترین رزولوشن)\n` +
-    `• 📌 <b>پینترست</b> (عکس‌ها و ویدیوهای باکیفیت)\n\n` +
-    `💡 <b>کافیه فقط لینک هر پستی که می‌خوای رو برام بفرستی تا در چند ثانیه فایل کاملش رو برات بفرستم!</b>`
+    `سلام <b>${name || 'دوست من'}</b> عزیز! 🎯\n` +
+    `به <b>شکارچی آفرها و لایسنس‌های رایگان راد پروتکل</b> خوش اومدی! ⚡️\n\n` +
+    `اینجا قرار نیست هیچ فرصت طلایی، لایسنس ویندوز و نرم‌افزار، اکانت پریمیوم، کوپن ۱۰۰٪ رایگان یودمی یا کانفیگ پرسرعتی رو از دست بدی!\n\n` +
+    `💡 <b>امکانات ویژه شما:</b>\n` +
+    `• 🎁 <b>آفرهای داغ و تست‌شده:</b> دسترسی رایگان و بدون سانسور به باارزش‌ترین فرصت‌های وب\n` +
+    `• 🔔 <b>زنگ هشدار اختصاصی:</b> دسته‌های مورد علاقه‌ت رو انتخاب کن تا به محض ثبت آفر جدید، اختصاصی تو پیوی بهت خبر بدم!\n` +
+    `• 🔍 <b>جستجوی هوشمند:</b> اسم هر برنامه یا مهارتی (مثل <code>canva</code>، <code>vpn</code>، <code>ویندوز</code>، <code>python</code>) رو بفرستی فورا برات می‌گردم\n` +
+    `• 🗂 <b>تفکیک موضوعی:</b> دسترسی سریع و مرتب به دوره‌ها، اکانت‌های هوش مصنوعی و گرافیک\n\n` +
+    `👇 از منوی زیر گزینه‌ی دلخواهت رو انتخاب کن:`
   );
+}
+
+// Format Deal View Card
+function formatDealCard(deal) {
+  const categories = db.getCategories();
+  const cat = categories[deal.category] || { name: 'عمومی', emoji: '🎁' };
+
+  let text = (
+    `🏷 <b>دسته‌بندی:</b> ${cat.emoji} ${cat.name}\n` +
+    `🔥 <b>وضعیت:</b> <i>${deal.badge || 'فعال'}</i>\n` +
+    `📅 <b>تاریخ ثبت:</b> <code>${deal.date}</code>\n\n` +
+    `📌 <b>${deal.title}</b>\n\n` +
+    `📝 <b>توضیحات:</b>\n${deal.description}\n\n`
+  );
+
+  if (deal.code && deal.code !== 'AUTO_APPLIED') {
+    text += `🔑 <b>کد کوپن / دستور فعال‌سازی:</b>\n<code>${deal.code}</code>\n\n`;
+  }
+
+  if (deal.instructions) {
+    text += `📋 <b>راهنمای دریافت / فعال‌سازی:</b>\n${deal.instructions}\n\n`;
+  }
+
+  text += `⚡️ <i>ارائه‌شده توسط ${REQUIRED_CHANNEL}</i>`;
+
+  const keyboard = [
+    [
+      { text: '🔗 ورود به صفحه / دریافت آفر', url: deal.link || CHANNEL_LINK }
+    ],
+    [
+      { text: '📢 اشتراک با دوستان', url: `https://t.me/share/url?url=${encodeURIComponent(deal.link || CHANNEL_LINK)}&text=${encodeURIComponent(`🎁 آفر رایگان: ${deal.title}\nدر کانال @rad_protocol`)}` }
+    ],
+    [
+      { text: '🔙 بازگشت به لیست آفرها', callback_data: `cat_${deal.category}_0` },
+      { text: '🏠 منوی اصلی', callback_data: 'menu_main' }
+    ]
+  ];
+
+  return { text, reply_markup: { inline_keyboard: keyboard } };
+}
+
+// Generate Category Selection Markup
+function getCategoriesMarkup() {
+  const categories = db.getCategories();
+  const rows = [];
+  const keys = Object.keys(categories);
+
+  for (let i = 0; i < keys.length; i += 2) {
+    const row = [];
+    const cat1 = categories[keys[i]];
+    const count1 = db.getDealsCount(keys[i]);
+    row.push({ text: `${cat1.emoji} ${cat1.name} (${count1})`, callback_data: `cat_${keys[i]}_0` });
+
+    if (keys[i + 1]) {
+      const cat2 = categories[keys[i + 1]];
+      const count2 = db.getDealsCount(keys[i + 1]);
+      row.push({ text: `${cat2.emoji} ${cat2.name} (${count2})`, callback_data: `cat_${keys[i + 1]}_0` });
+    }
+    rows.push(row);
+  }
+
+  rows.push([
+    { text: '🔥 نمایش همه آفرها', callback_data: 'view_latest_0' }
+  ]);
+  rows.push([
+    { text: '🏠 بازگشت به منوی اصلی', callback_data: 'menu_main' }
+  ]);
+
+  return { inline_keyboard: rows };
+}
+
+// Generate Interactive Alerts Manager Markup
+function getAlertsMarkup(userId) {
+  const user = db.getUser(userId) || { alerts: {} };
+  const userAlerts = user.alerts || {};
+  const categories = db.getCategories();
+  const rows = [];
+
+  for (const [key, cat] of Object.entries(categories)) {
+    const isEnabled = userAlerts[key] !== false; // Enabled by default
+    const statusIcon = isEnabled ? '✅' : '⬜️';
+    rows.push([
+      {
+        text: `${statusIcon} ${cat.emoji} ${cat.name}`,
+        callback_data: `toggle_alert_${key}`
+      }
+    ]);
+  }
+
+  rows.push([
+    { text: '🔔 فعال‌سازی همه', callback_data: 'alerts_all_on' },
+    { text: '🔕 خاموش کردن همه', callback_data: 'alerts_all_off' }
+  ]);
+  rows.push([
+    { text: '🏠 بازگشت به منوی اصلی', callback_data: 'menu_main' }
+  ]);
+
+  return { inline_keyboard: rows };
+}
+
+// Generate Deals List View with Pagination
+function getDealsListMarkup(categoryKey, offset = 0, limit = 5) {
+  const deals = db.getDeals(categoryKey, limit, offset);
+  const total = db.getDealsCount(categoryKey);
+  const categories = db.getCategories();
+  const catTitle = categoryKey === 'all' || !categoryKey ? '🔥 تازه‌ترین آفرهای داغ' : `${categories[categoryKey]?.emoji || '🗂'} ${categories[categoryKey]?.name || 'دسته‌بندی'}`;
+
+  let header = (
+    `📦 <b>${catTitle}</b>\n` +
+    `تعداد کل فرصت‌های این بخش: <b>${total}</b>\n\n` +
+    `برای مشاهده جزئیات و لینک دریافت هر آفر، روی دکمه مربوطه کلیک کنید:\n`
+  );
+
+  const rows = [];
+  if (deals.length === 0) {
+    header += `\n<i>هنوز آفری در این دسته‌بندی ثبت نشده است! به زودی موارد جدید اضافه می‌شود.</i>\n`;
+  } else {
+    for (let i = 0; i < deals.length; i++) {
+      const d = deals[i];
+      const num = offset + i + 1;
+      header += `\n${num}. <b>${d.title}</b> (${d.badge || 'آفر'})\n`;
+      rows.push([
+        { text: `👉 ${num}. مشاهده: ${d.title.slice(0, 32)}...`, callback_data: `deal_${d.id}` }
+      ]);
+    }
+  }
+
+  // Pagination navigation
+  const navRow = [];
+  if (offset > 0) {
+    const prevOffset = Math.max(0, offset - limit);
+    navRow.push({ text: '⬅️ صفحه قبل', callback_data: `page_${categoryKey || 'all'}_${prevOffset}` });
+  }
+  if (offset + limit < total) {
+    const nextOffset = offset + limit;
+    navRow.push({ text: 'صفحه بعد ➡️', callback_data: `page_${categoryKey || 'all'}_${nextOffset}` });
+  }
+  if (navRow.length > 0) {
+    rows.push(navRow);
+  }
+
+  rows.push([
+    { text: '🗂 تغییر دسته‌بندی', callback_data: 'menu_categories' },
+    { text: '🏠 منوی اصلی', callback_data: 'menu_main' }
+  ]);
+
+  return { text: header, reply_markup: { inline_keyboard: rows } };
+}
+
+// Broadcast new deal to subscribed users
+async function notifySubscribersOfNewDeal(deal) {
+  try {
+    const subscribers = db.getAlertSubscribers(deal.category);
+    if (!subscribers || subscribers.length === 0) return 0;
+
+    const categories = db.getCategories();
+    const cat = categories[deal.category] || { emoji: '🎁', name: 'آفر' };
+
+    const alertText = (
+      `🔔 <b>شکار جدید در دسته‌بندی ${cat.emoji} ${cat.name}!</b>\n\n` +
+      `📌 <b>${deal.title}</b>\n` +
+      `🔥 <b>وضعیت:</b> <i>${deal.badge || 'فرصت ویژه'}</i>\n\n` +
+      `📝 ${deal.description.slice(0, 180)}...\n\n` +
+      `👇 <i>برای مشاهده توضیحات کامل و دریافت رایگان، روی دکمه زیر کلیک کنید:</i>`
+    );
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '🎁 مشاهده و دریافت این آفر', callback_data: `deal_${deal.id}` }
+        ],
+        [
+          { text: '📢 کانال RadProtocol', url: CHANNEL_LINK }
+        ]
+      ]
+    };
+
+    let sent = 0;
+    for (const uid of subscribers) {
+      try {
+        await bot.sendMessage(uid, alertText, { reply_markup: markup });
+        sent++;
+        await new Promise(r => setTimeout(r, 45)); // Rate limiting Telegram API
+      } catch (e) {
+        // User may have blocked or stopped bot
+      }
+    }
+
+    db.recordAlertSent(sent);
+    console.log(`Dispatched new deal alert to ${sent}/${subscribers.length} subscribers.`);
+    return sent;
+  } catch (err) {
+    console.error('Error notifying subscribers:', err.message);
+    return 0;
+  }
 }
 
 // Handle Incoming Updates
@@ -115,11 +321,12 @@ async function handleUpdate(update) {
 
       db.registerUser(cq.from);
 
+      // Membership Verification Callback
       if (data === 'verify_join') {
         const joined = await isChannelMember(userId);
         if (joined) {
           await bot.answerCallbackQuery(cq.id, {
-            text: 'عضویت شما با موفقیت تأیید شد! خوش آمدید 🎉',
+            text: 'عضویت شما با موفقیت تأیید شد! به خانواده RadProtocol خوش آمدید 🌹',
             show_alert: true
           });
           if (messageId) {
@@ -133,188 +340,216 @@ async function handleUpdate(update) {
           }
         } else {
           await bot.answerCallbackQuery(cq.id, {
-            text: '❌ شما هنوز عضو کانال نشده‌اید! لطفاً ابتدا عضو شوید.',
+            text: '❌ شما هنوز عضو کانال نشده‌اید! لطفاً ابتدا عضو کانال شوید و سپس مجدداً کلیک کنید.',
             show_alert: true
           });
         }
         return;
       }
 
-      if (data === 'help_menu') {
+      // Check membership for any other callback query
+      const isMember = await isChannelMember(userId);
+      if (!isMember) {
+        await bot.answerCallbackQuery(cq.id, {
+          text: '🔒 برای استفاده از دکمه‌ها ابتدا باید در کانال عضو شوید.',
+          show_alert: true
+        });
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, getJoinMessage(cq.from.first_name), {
+            reply_markup: getJoinMarkup()
+          });
+        }
+        return;
+      }
+
+      // Main Menu Callback
+      if (data === 'menu_main') {
+        await bot.answerCallbackQuery(cq.id);
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, getStartMessage(cq.from.first_name), {
+            reply_markup: getMainMenuMarkup()
+          });
+        } else {
+          await bot.sendMessage(chatId, getStartMessage(cq.from.first_name), {
+            reply_markup: getMainMenuMarkup()
+          });
+        }
+        return;
+      }
+
+      // Categories Menu
+      if (data === 'menu_categories') {
+        await bot.answerCallbackQuery(cq.id);
+        const text = (
+          `🗂 <b>دسته‌بندی موضوعی آفرهای شکارچی:</b>\n\n` +
+          `لطفاً دسته‌بندی مورد نظر خود را انتخاب کنید تا لیست جدیدترین لایسنس‌ها، اکانت‌ها و دوره‌ها را ببینید:`
+        );
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, text, {
+            reply_markup: getCategoriesMarkup()
+          });
+        } else {
+          await bot.sendMessage(chatId, text, { reply_markup: getCategoriesMarkup() });
+        }
+        return;
+      }
+
+      // Alerts Settings Menu
+      if (data === 'menu_alerts') {
+        await bot.answerCallbackQuery(cq.id);
+        const text = (
+          `🔔 <b>مرکز مدیریت زنگ هشدار آفرها:</b>\n\n` +
+          `با کلیک روی هر گزینه، می‌توانید دریافت نوتیفیکیشن برای آن دسته‌بندی را فعال (✅) یا غیرفعال (⬜️) کنید.\n\n` +
+          `به محض اینکه آفر، کوپن یا لایسنس جدیدی ثبت شود، ربات فوراً در پیوی شما ارسال خواهد کرد!`
+        );
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, text, {
+            reply_markup: getAlertsMarkup(userId)
+          });
+        } else {
+          await bot.sendMessage(chatId, text, { reply_markup: getAlertsMarkup(userId) });
+        }
+        return;
+      }
+
+      // Toggle Individual Alert
+      if (data.startsWith('toggle_alert_')) {
+        const catKey = data.replace('toggle_alert_', '');
+        const newState = db.toggleAlert(userId, catKey);
+        const categories = db.getCategories();
+        const catName = categories[catKey] ? categories[catKey].name : catKey;
+
+        await bot.answerCallbackQuery(cq.id, {
+          text: newState ? `هشدار برای «${catName}» فعال شد 🔔` : `هشدار برای «${catName}» خاموش شد 🔕`
+        });
+
+        if (messageId) {
+          await bot.editMessageReplyMarkup(chatId, messageId, {
+            reply_markup: getAlertsMarkup(userId)
+          });
+        }
+        return;
+      }
+
+      // Turn All Alerts On/Off
+      if (data === 'alerts_all_on' || data === 'alerts_all_off') {
+        const turnOn = data === 'alerts_all_on';
+        db.setAllAlerts(userId, turnOn);
+        await bot.answerCallbackQuery(cq.id, {
+          text: turnOn ? 'تمامی هشدارها فعال شدند! 🔔' : 'تمام هشدارها خاموش شدند 🔕'
+        });
+        if (messageId) {
+          await bot.editMessageReplyMarkup(chatId, messageId, {
+            reply_markup: getAlertsMarkup(userId)
+          });
+        }
+        return;
+      }
+
+      // Search Help Menu
+      if (data === 'menu_search_help') {
         await bot.answerCallbackQuery(cq.id);
         const helpText = (
-          `📖 <b>راهنمای استفاده از ربات:</b>\n\n` +
-          `1️⃣ وارد اپلیکیشن (اینستاگرام، تیک‌تاک، یوتیوب و... ) شوید.\n` +
-          `2️⃣ روی دکمه Share یا کپی لینک (Copy Link) پست مورد نظر بزنید.\n` +
-          `3️⃣ لینک را در همین چت ارسال کنید.\n` +
-          `4️⃣ ربات به صورت خودکار رسانه را استخراج و برای شما ارسال می‌کند!\n\n` +
-          `📢 کانال ما: ${REQUIRED_CHANNEL}`
+          `🔍 <b>راهنمای جستجوی هوشمند در شکارچی:</b>\n\n` +
+          `نیازی به زدن دستور خاصی نیست! هر کلمه‌ای را در همین صفحه بنویسید و بفرستید، ربات تمام آفرها، عنوان‌ها، توضیحات و تگ‌ها را جستجو می‌کند.\n\n` +
+          `💡 <b>نمونه عبارت‌های قابل جستجو:</b>\n` +
+          `• <code>canva</code> یا <code>کانوا</code>\n` +
+          `• <code>vpn</code> یا <code>وایرگارد</code>\n` +
+          `• <code>ویندوز</code> یا <code>windows</code>\n` +
+          `• <code>udemy</code> یا <code>پایتون</code>\n` +
+          `• <code>ai</code> یا <code>هوش مصنوعی</code>\n` +
+          `• <code>آنتی ویروس</code>\n\n` +
+          `همین حالا کلمه مورد نظرتان را تایپ کنید و بفرستید! 👇`
         );
-        await bot.sendMessage(chatId, helpText, { reply_markup: getMainMenuMarkup() });
+        const backMarkup = {
+          inline_keyboard: [
+            [{ text: '🏠 بازگشت به منوی اصلی', callback_data: 'menu_main' }]
+          ]
+        };
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, helpText, { reply_markup: backMarkup });
+        } else {
+          await bot.sendMessage(chatId, helpText, { reply_markup: backMarkup });
+        }
         return;
       }
 
-      if (data === 'stats_menu') {
+      // Bot Statistics Menu
+      if (data === 'menu_stats') {
         await bot.answerCallbackQuery(cq.id);
         const stats = db.getStats();
+        const uptimeH = (process.uptime() / 3600).toFixed(1);
         const statsText = (
-          `📊 <b>وضعیت سامانه دانلودر:</b>\n\n` +
-          `👥 تعداد کاربران: <b>${stats.totalUsers}</b> نفر\n` +
-          `📥 تعداد کل دانلودها: <b>${stats.totalDownloads}</b> فایل\n` +
-          `🟢 وضعیت سرور: <b>آنلاین و پرسرعت (Render Cloud)</b>\n\n` +
-          `📢 اسپانسر: ${REQUIRED_CHANNEL}`
+          `📊 <b>آمار و وضعیت سامانه شکارچی RadProtocol:</b>\n\n` +
+          `👥 تعداد کل اعضای ربات: <b>${stats.totalUsers} نفر</b>\n` +
+          `🎁 تعداد آفرهای ثبت‌شده: <b>${stats.totalDeals} آفر</b>\n` +
+          `🔔 هشدارهای ارسال‌شده: <b>${stats.totalAlertsSent} پیام</b>\n` +
+          `🔍 جستجوهای انجام‌شده: <b>${stats.totalSearches} بار</b>\n` +
+          `⏱ آپ‌تایم سرور: <b>${uptimeH} ساعت</b>\n` +
+          `🟢 وضعیت سرویس: <b>فعال و آنلاین (Render Cloud)</b>\n\n` +
+          `📢 کانال رسمی: ${REQUIRED_CHANNEL}`
         );
-        await bot.sendMessage(chatId, statsText, { reply_markup: getMainMenuMarkup() });
+        const backMarkup = {
+          inline_keyboard: [
+            [{ text: '🏠 بازگشت به منوی اصلی', callback_data: 'menu_main' }]
+          ]
+        };
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, statsText, { reply_markup: backMarkup });
+        } else {
+          await bot.sendMessage(chatId, statsText, { reply_markup: backMarkup });
+        }
         return;
       }
 
-      // Interactive YouTube quality selection callback
-      if (data.startsWith('yt_')) {
-        const parts = data.split('_');
-        const cacheId = parts[1];
-        const qualityChoice = parts[2];
-        const item = ytPendingCache.get(cacheId);
+      // View Latest Deals / Deals List Pagination
+      if (data.startsWith('view_latest_') || data.startsWith('page_') || data.startsWith('cat_')) {
+        await bot.answerCallbackQuery(cq.id);
+        let categoryKey = 'all';
+        let offset = 0;
 
-        if (!item) {
+        if (data.startsWith('view_latest_')) {
+          offset = parseInt(data.replace('view_latest_', ''), 10) || 0;
+          categoryKey = 'all';
+        } else if (data.startsWith('page_')) {
+          const parts = data.split('_');
+          categoryKey = parts[1];
+          offset = parseInt(parts[2], 10) || 0;
+        } else if (data.startsWith('cat_')) {
+          const parts = data.split('_');
+          categoryKey = parts[1];
+          offset = parseInt(parts[2], 10) || 0;
+        }
+
+        const view = getDealsListMarkup(categoryKey, offset, 5);
+        if (messageId) {
+          await bot.editMessageText(chatId, messageId, view.text, { reply_markup: view.reply_markup });
+        } else {
+          await bot.sendMessage(chatId, view.text, { reply_markup: view.reply_markup });
+        }
+        return;
+      }
+
+      // View Deal Details
+      if (data.startsWith('deal_')) {
+        const dealId = data.replace('deal_', '');
+        const deal = dealId === 'random' ? db.getRandomDeal() : db.getDealById(dealId);
+
+        if (!deal) {
           await bot.answerCallbackQuery(cq.id, {
-            text: '⚠️ این دکمه منقضی شده است. لطفاً لینک را مجدداً بفرستید.',
+            text: '⚠️ متأسفانه این آفر پیدا نشد یا منقضی شده است.',
             show_alert: true
           });
           return;
         }
 
-        await bot.answerCallbackQuery(cq.id, { text: '⏳ درخواست شما ثبت شد. در حال پردازش...' });
-
+        await bot.answerCallbackQuery(cq.id);
+        const card = formatDealCard(deal);
         if (messageId) {
-          await bot.editMessageText(
-            chatId,
-            messageId,
-            `⏳ <b>در حال دانلود کیفیت انتخابی از یوتیوب...</b>\n\n` +
-            `📹 ${item.title.slice(0, 70)}\n` +
-            `لطفاً چند لحظه تا شروع ارسال به تلگرام صبور باشید.`
-          );
+          await bot.editMessageText(chatId, messageId, card.text, card);
+        } else {
+          await bot.sendMessage(chatId, card.text, card);
         }
-
-        const ext = qualityChoice === 'audio' ? 'mp3' : 'mp4';
-        const tmpFile = path.join('/tmp', `yt_${Date.now()}_${qualityChoice}.${ext}`);
-
-        try {
-          const success = await downloader.downloadYouTubeToFile(item.url, qualityChoice, tmpFile);
-
-          if (!success || !fs.existsSync(tmpFile)) {
-            if (messageId) {
-              await bot.editMessageText(
-                chatId,
-                messageId,
-                `❌ <b>خطا در استخراج این کیفیت.</b> می‌توانید از لینک دانلود مستقیم استفاده کنید:`,
-                {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [{ text: '📥 دانلود مستقیم ویدیو', url: item.bestUrl || item.url }]
-                    ]
-                  }
-                }
-              );
-            }
-            return;
-          }
-
-          const fileStat = fs.statSync(tmpFile);
-          const sizeMB = (fileStat.size / (1024 * 1024)).toFixed(1);
-
-          // Telegram Bot API limit: 50MB for file uploads
-          if (fileStat.size > 50 * 1024 * 1024) {
-            try { fs.unlinkSync(tmpFile); } catch (e) {}
-            if (messageId) {
-              await bot.editMessageText(
-                chatId,
-                messageId,
-                `⚠️ <b>حجم این فایل (${sizeMB} مگابایت) بیش از سقف مجاز تلگرام (۵۰ مگابایت) است.</b>\n\n` +
-                `برای دانلود با بالاترین سرعت از لینک پرسرعت زیر استفاده کنید:`,
-                {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [{ text: '📥 دانلود مستقیم فایل (لینک پرسرعت)', url: item.bestUrl || item.url }]
-                    ]
-                  }
-                }
-              );
-            }
-            return;
-          }
-
-          // Upload to Telegram as playable video or audio
-          if (messageId) {
-            await bot.editMessageText(
-              chatId,
-              messageId,
-              `🚀 <b>دانلود از یوتیوب کامل شد!</b>\nدر حال آپلود و ارسال در تلگرام (${sizeMB} MB)...`
-            );
-          }
-
-          const caption = (
-            `🎬 <b>${item.title.slice(0, 100)}</b>\n\n` +
-            `👤 <b>کانال:</b> ${item.author}\n` +
-            `💾 <b>حجم فایل:</b> ${sizeMB} مگابایت\n\n` +
-            `📢 <b>کانال ما:</b> ${REQUIRED_CHANNEL}\n` +
-            `👥 <b>گروه:</b> ${SUPPORT_GROUP}`
-          );
-
-          let sendRes;
-          if (qualityChoice === 'audio') {
-            sendRes = await bot.sendAudioFile(chatId, tmpFile, {
-              caption: caption,
-              title: item.title,
-              performer: item.author
-            });
-          } else {
-            sendRes = await bot.sendVideoFile(chatId, tmpFile, {
-              caption: caption,
-              supports_streaming: true
-            });
-          }
-
-          if (sendRes && sendRes.ok) {
-            db.recordDownload(userId, 'youtube');
-            if (messageId) {
-              await bot.deleteMessage(chatId, messageId);
-            }
-          } else {
-            if (messageId) {
-              await bot.editMessageText(
-                chatId,
-                messageId,
-                `❌ خطا در ارسال فایل تلگرام: ${sendRes?.description || 'نامشخص'}\nمی‌توانید از لینک زیر مستقیم دانلود کنید:`,
-                {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [{ text: '📥 دانلود مستقیم از مرورگر', url: item.bestUrl || item.url }]
-                    ]
-                  }
-                }
-              );
-            }
-          }
-        } catch (err) {
-          console.error('YouTube quality processing error:', err.message);
-          if (messageId) {
-            await bot.editMessageText(chatId, messageId, `❌ در پردازش ویدیو خطایی رخ داد: ${err.message}`);
-          }
-        } finally {
-          try {
-            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
-          } catch (e) {}
-        }
-        return;
-      }
-
-      // Audio download button for TikTok
-      if (data.startsWith('audio_')) {
-        const audioUrl = Buffer.from(data.replace('audio_', ''), 'base64').toString('utf-8');
-        await bot.answerCallbackQuery(cq.id, { text: 'در حال ارسال فایل صوتی...' });
-        await bot.sendAudio(chatId, audioUrl, {
-          caption: `🎵 فایل صوتی استخراج‌شده\n📢 ${REQUIRED_CHANNEL}`
-        });
         return;
       }
     }
@@ -348,31 +583,75 @@ async function handleUpdate(update) {
       // Command: /help
       if (text === '/help') {
         const helpText = (
-          `📖 <b>راهنمای استفاده از ربات:</b>\n\n` +
-          `کافیست لینک هر ویدیو، عکس یا موزیک از اینستاگرام، تیک‌تاک، یوتیوب، توییتر یا پینترست را بفرستید.\n\n` +
-          `📢 ${REQUIRED_CHANNEL}`
+          `📖 <b>راهنمای ربات شکارچی آفرها:</b>\n\n` +
+          `• برای دیدن دسته‌بندی‌ها: /categories\n` +
+          `• برای آخرین آفرها: /latest\n` +
+          `• برای تنظیم هشدار اختصاصی: /alerts\n` +
+          `• برای دریافت یک آفر رندوم: /random\n` +
+          `• برای جستجو: کافیست نام نرم‌افزار، لایسنس یا مهارت مورد نظر را تایپ کنید.\n\n` +
+          `📢 کانال ما: ${REQUIRED_CHANNEL}`
         );
         await bot.sendMessage(chatId, helpText, { reply_markup: getMainMenuMarkup() });
         return;
       }
 
-      // Admin Command: /admin or /stats
-      if ((text === '/admin' || text === '/stats') && isAdmin(userId)) {
+      // Command: /categories
+      if (text === '/categories') {
+        await bot.sendMessage(chatId, '🗂 لطفاً دسته‌بندی مورد نظرتان را انتخاب کنید:', {
+          reply_markup: getCategoriesMarkup()
+        });
+        return;
+      }
+
+      // Command: /latest
+      if (text === '/latest') {
+        const view = getDealsListMarkup('all', 0, 5);
+        await bot.sendMessage(chatId, view.text, { reply_markup: view.reply_markup });
+        return;
+      }
+
+      // Command: /alerts
+      if (text === '/alerts') {
+        await bot.sendMessage(chatId, '🔔 تنظیمات زنگ هشدار آفرها:', {
+          reply_markup: getAlertsMarkup(userId)
+        });
+        return;
+      }
+
+      // Command: /random
+      if (text === '/random') {
+        const deal = db.getRandomDeal();
+        if (deal) {
+          const card = formatDealCard(deal);
+          await bot.sendMessage(chatId, card.text, card);
+        } else {
+          await bot.sendMessage(chatId, 'هنوز آفری در دیتابیس ثبت نشده است.');
+        }
+        return;
+      }
+
+      // Admin Command: /admin or /panel
+      if ((text === '/admin' || text === '/panel') && isAdmin(userId)) {
         const stats = db.getStats();
         const uptimeH = (process.uptime() / 3600).toFixed(1);
         const adminText = (
-          `👑 <b>پنل مدیریت ربات (RadProtocol)</b>\n\n` +
-          `👥 کل کاربران ثبت‌شده: <b>${stats.totalUsers}</b>\n` +
-          `📥 کل دانلودهای موفق: <b>${stats.totalDownloads}</b>\n\n` +
-          `📱 <b>آمار به تفکیک پلتفرم:</b>\n` +
-          `• تیک‌تاک: <b>${stats.platforms.tiktok || 0}</b>\n` +
-          `• اینستاگرام: <b>${stats.platforms.instagram || 0}</b>\n` +
-          `• یوتیوب: <b>${stats.platforms.youtube || 0}</b>\n` +
-          `• توییتر: <b>${stats.platforms.twitter || 0}</b>\n` +
-          `• پینترست: <b>${stats.platforms.pinterest || 0}</b>\n` +
-          `• سایر: <b>${stats.platforms.other || 0}</b>\n\n` +
-          `⏱ آپ‌تایم سرور: <b>${uptimeH} ساعت</b>\n` +
-          `📢 پیام همگانی: <code>/broadcast متن پیام</code>`
+          `👑 <b>پنل مدیریت شکارچی (RadProtocol Admin)</b>\n\n` +
+          `👥 تعداد کاربران کل: <b>${stats.totalUsers} نفر</b>\n` +
+          `🎁 تعداد کل آفرها: <b>${stats.totalDeals} عدد</b>\n` +
+          `🔔 هشدارهای ارسال‌شده: <b>${stats.totalAlertsSent} بار</b>\n` +
+          `🔍 جستجوهای کاربران: <b>${stats.totalSearches} بار</b>\n` +
+          `⏱ آپ‌تایم سرویس: <b>${uptimeH} ساعت</b>\n\n` +
+          `📊 <b>آمار اشتراک هشدارها:</b>\n` +
+          `• یودمی: <b>${stats.alertSubscriptions.udemy || 0} نفر</b>\n` +
+          `• وی‌پی‌ان: <b>${stats.alertSubscriptions.vpn || 0} نفر</b>\n` +
+          `• هوش مصنوعی: <b>${stats.alertSubscriptions.ai || 0} نفر</b>\n` +
+          `• گرافیک/کانوا: <b>${stats.alertSubscriptions.design || 0} نفر</b>\n` +
+          `• لایسنس و نرم‌افزار: <b>${stats.alertSubscriptions.licenses || 0} نفر</b>\n` +
+          `• گیفت و ترفند: <b>${stats.alertSubscriptions.freebies || 0} نفر</b>\n\n` +
+          `🛠 <b>دستورات مدیریتی:</b>\n` +
+          `• ارسال همگانی:\n<code>/broadcast متن پیام</code>\n` +
+          `• افزودن آفر فوری:\n<code>/adddeal دسته | عنوان | لینک | توضیحات | کد (اختیاری)</code>\n` +
+          `• حذف آفر:\n<code>/deldeal [شناسه]</code>`
         );
         await bot.sendMessage(chatId, adminText);
         return;
@@ -394,240 +673,91 @@ async function handleUpdate(update) {
           try {
             await bot.sendMessage(uid, broadcastText);
             successCount++;
-            await new Promise(r => setTimeout(r, 40)); // Rate limit protection
+            await new Promise(r => setTimeout(r, 40));
           } catch (e) {
-            // User may have blocked bot
+            // Ignored if user blocked
           }
         }
-        await bot.sendMessage(chatId, `✅ پیام همگانی با موفقیت به ${successCount} نفر از ${users.length} کاربر ارسال شد.`);
+        await bot.sendMessage(chatId, `✅ پیام همگانی به ${successCount} نفر از ${users.length} کاربر با موفقیت ارسال شد.`);
         return;
       }
 
-      // URL Detection & Media Download
-      const urlRegex = /(https?:\/\/[^\s]+)/gi;
-      const urls = text.match(urlRegex);
+      // Admin Command: /adddeal <cat> | <title> | <link> | <desc> | <code>
+      if (text.startsWith('/adddeal') && isAdmin(userId)) {
+        const raw = text.replace('/adddeal', '').trim();
+        const parts = raw.split('|').map(s => s.trim());
 
-      if (urls && urls.length > 0) {
-        const targetUrl = urls[0];
-
-        // 1. YouTube Specialized Handler with Interactive Quality Selector
-        if (/(?:youtube\.com|youtu\.be)/i.test(targetUrl)) {
-          const statusMsg = await bot.sendMessage(chatId, '🔍 <b>در حال بررسی کیفیت‌های ویدیوی یوتیوب...</b>');
-          const statusMsgId = statusMsg && statusMsg.ok ? statusMsg.result.message_id : null;
-
-          try {
-            const ytInfo = await downloader.getYouTubeInfo(targetUrl);
-            if (ytInfo && ytInfo.qualities && ytInfo.qualities.length > 0) {
-              const cacheId = Math.random().toString(36).substring(2, 8);
-              ytPendingCache.set(cacheId, {
-                url: targetUrl,
-                title: ytInfo.title,
-                author: ytInfo.author,
-                bestUrl: ytInfo.bestUrl,
-                qualities: ytInfo.qualities,
-                ts: Date.now()
-              });
-
-              // Clean up old entries (>1 hour)
-              const oneHourAgo = Date.now() - 3600000;
-              for (const [k, v] of ytPendingCache.entries()) {
-                if (v.ts < oneHourAgo) ytPendingCache.delete(k);
-              }
-
-              const rows = [];
-              const videoButtons = [];
-              for (const q of ytInfo.qualities) {
-                if (q.id !== 'audio') {
-                  const sizeText = q.sizeMB ? ` (${q.sizeMB} MB)` : '';
-                  videoButtons.push({
-                    text: `🎬 ${q.label}${sizeText}`,
-                    callback_data: `yt_${cacheId}_${q.id}`
-                  });
-                }
-              }
-              if (videoButtons.length > 0) rows.push(videoButtons);
-
-              const audioQ = ytInfo.qualities.find(q => q.id === 'audio');
-              if (audioQ) {
-                const audioSize = audioQ.sizeMB ? ` (${audioQ.sizeMB} MB)` : '';
-                rows.push([
-                  { text: `🎧 دانلود فایل صوتی MP3${audioSize}`, callback_data: `yt_${cacheId}_audio` }
-                ]);
-              }
-
-              rows.push([
-                { text: `📢 کانال ردپروتکل`, url: CHANNEL_LINK },
-                { text: `👥 گروه پشتیبانی`, url: SUPPORT_GROUP }
-              ]);
-
-              const durMin = Math.floor((ytInfo.duration || 0) / 60);
-              const durSec = (ytInfo.duration || 0) % 60;
-              const durText = durMin > 0 ? `${durMin} دقیقه و ${durSec} ثانیه` : `${durSec} ثانیه`;
-
-              const promptText = (
-                `🎬 <b>${ytInfo.title}</b>\n\n` +
-                `👤 <b>کانال:</b> ${ytInfo.author}\n` +
-                `⏱ <b>مدت زمان:</b> ${durText}\n\n` +
-                `👇 <b>کیفیت مورد نظر خود را برای دانلود انتخاب کنید:</b>`
-              );
-
-              await bot.editMessageText(chatId, statusMsgId, promptText, {
-                reply_markup: { inline_keyboard: rows }
-              });
-              return;
-            }
-          } catch (ytErr) {
-            console.warn('YouTube interactive check failed, falling back to direct:', ytErr.message);
-          }
+        if (parts.length < 4) {
+          await bot.sendMessage(chatId, (
+            `⚠️ فرمت دستور نادرست است.\nالگو:\n` +
+            `<code>/adddeal دسته | عنوان | لینک | توضیحات | کد (اختیاری)</code>\n\n` +
+            `دسته‌ها: <code>udemy</code>, <code>vpn</code>, <code>ai</code>, <code>design</code>, <code>licenses</code>, <code>freebies</code>`
+          ));
+          return;
         }
 
-        // Send processing status for other media or fallback
-        const statusMsg = await bot.sendMessage(chatId, '⏳ <b>در حال پردازش و دریافت رسانه... لطفاً چند لحظه صبر کنید.</b>');
-        const statusMsgId = statusMsg && statusMsg.ok ? statusMsg.result.message_id : null;
+        const [cat, title, link, desc, code] = parts;
+        const newDeal = db.addDeal({
+          title,
+          category: cat,
+          link,
+          description: desc,
+          code: code || '',
+          badge: '🔥 جدید',
+          instructions: 'روی دکمه دریافت زیر کلیک کرده و مراحل را طبق راهنما طی کنید.'
+        });
 
-        try {
-          const result = await downloader.downloadMedia(targetUrl);
+        await bot.sendMessage(chatId, `✅ آفر جدید با شناسه <code>${newDeal.id}</code> ثبت شد!\nدر حال ارسال هشدار به مشترکین...`);
+        const alertedCount = await notifySubscribersOfNewDeal(newDeal);
+        await bot.sendMessage(chatId, `📢 هشدار این آفر برای <b>${alertedCount}</b> کاربر مشترک ارسال گردید.`);
+        return;
+      }
 
-          if (!result) {
-            if (statusMsgId) {
-              await bot.editMessageText(
-                chatId,
-                statusMsgId,
-                '❌ <b>متأسفانه امکان دریافت این رسانه وجود نداشت.</b>\n\n' +
-                'لطفاً بررسی کنید پیج یا پست عمومی (Public) باشد و لینک به درستی کپی شده باشد.'
-              );
-            }
-            return;
-          }
-
-          // Format Platform Badge
-          const badges = {
-            tiktok: '🎵 تیک‌تاک (TikTok)',
-            instagram: '📱 اینستاگرام (Instagram)',
-            youtube: '🎬 یوتیوب (YouTube)',
-            twitter: '🐦 توییتر (Twitter / X)',
-            pinterest: '📌 پینترست (Pinterest)',
-            generic: '🌐 وب'
-          };
-          const badge = badges[result.platform] || '⚡️ رسانه';
-
-          let caption = (
-            `🎬 <b>${(result.title || 'رسانه دانلودی').slice(0, 100)}</b>\n\n` +
-            `👤 <b>سازنده:</b> ${result.author || 'ناشناس'}\n` +
-            `⚡️ <b>پلتفرم:</b> ${badge}\n\n` +
-            `💎 <b>دانلود رایگان با ربات اختصاصی:</b>\n` +
-            `📢 <b>کانال ما:</b> ${REQUIRED_CHANNEL}\n` +
-            `👥 <b>گروه:</b> ${SUPPORT_GROUP}`
-          );
-
-          // Inline buttons for additional options (e.g. MP3 for TikTok)
-          let replyMarkup = null;
-          if (result.audioUrl && result.audioUrl.length < 50) {
-            const b64 = Buffer.from(result.audioUrl).toString('base64');
-            replyMarkup = {
-              inline_keyboard: [
-                [{ text: '🎵 دریافت فایل صوتی (MP3)', callback_data: `audio_${b64}` }]
-              ]
-            };
-          }
-
-          // Send Video
-          if (result.type === 'video' && result.videoUrl) {
-            const sendRes = await bot.sendVideo(chatId, result.videoUrl, {
-              caption: caption,
-              reply_markup: replyMarkup
-            });
-
-            if (sendRes && sendRes.ok) {
-              db.recordDownload(userId, result.platform);
-              if (statusMsgId) await bot.deleteMessage(chatId, statusMsgId);
-              return;
-            }
-
-            console.warn('sendVideo failed with URL, trying direct link button fallback:', sendRes?.description);
-            // Fallback for large files (>20MB) or IP-restricted URLs: Send Direct Download Button!
-            const downloadMarkup = {
-              inline_keyboard: [
-                [{ text: '📥 دانلود مستقیم ویدیو (با کیفیت اصلی)', url: result.videoUrl }],
-                ...(replyMarkup && replyMarkup.inline_keyboard ? replyMarkup.inline_keyboard : [])
-              ]
-            };
-
-            if (statusMsgId) {
-              await bot.editMessageText(
-                chatId,
-                statusMsgId,
-                `🎬 <b>${result.title || 'ویدیو با موفقیت استخراج شد'}</b>\n\n` +
-                `👤 <b>ارسال‌کننده:</b> ${result.author || 'ناشناس'}\n` +
-                `📦 <b>پلتفرم:</b> ${result.platform.toUpperCase()}\n\n` +
-                `⚠️ <i>به دلیل محدودیت حجم تلگرام برای این فایل (بیش از ۲۰ مگابایت)، لینک مستقیم دانلود با بالاترین کیفیت آماده شد:</i>\n\n` +
-                `👇 <b>برای دانلود یا تماشا روی دکمه زیر کلیک کنید:</b>`,
-                { reply_markup: downloadMarkup }
-              );
-              db.recordDownload(userId, result.platform);
-              return;
-            }
-          }
-
-          // Send Photo
-          if (result.type === 'photo' && result.photoUrl) {
-            const sendRes = await bot.sendPhoto(chatId, result.photoUrl, {
-              caption: caption
-            });
-
-            if (sendRes && sendRes.ok) {
-              db.recordDownload(userId, result.platform);
-              if (statusMsgId) await bot.deleteMessage(chatId, statusMsgId);
-              return;
-            }
-          }
-
-          // Send Photos Carousel
-          if (result.type === 'carousel' || result.type === 'photos') {
-            const mediaList = [];
-            const photos = result.photos || [];
-
-            for (let i = 0; i < Math.min(photos.length, 10); i++) {
-              mediaList.push({
-                type: 'photo',
-                media: photos[i],
-                caption: i === 0 ? caption : undefined,
-                parse_mode: 'HTML'
-              });
-            }
-
-            if (mediaList.length > 0) {
-              await bot.sendMediaGroup(chatId, mediaList);
-              db.recordDownload(userId, result.platform);
-              if (statusMsgId) await bot.deleteMessage(chatId, statusMsgId);
-              return;
-            }
-          }
-
-          // If send failed
-          if (statusMsgId) {
-            await bot.editMessageText(
-              chatId,
-              statusMsgId,
-              '❌ <b>خطا در ارسال فایل.</b> ممکن است حجم فایل بیش از حد مجاز تلگرام باشد یا لینک منقضی شده باشد.'
-            );
-          }
-        } catch (err) {
-          console.error('Download processing error:', err.message);
-          if (statusMsgId) {
-            await bot.editMessageText(chatId, statusMsgId, '❌ در پردازش این لینک خطایی رخ داد.');
-          }
+      // Admin Command: /deldeal <id>
+      if (text.startsWith('/deldeal') && isAdmin(userId)) {
+        const dealId = text.replace('/deldeal', '').trim();
+        const ok = db.deleteDeal(dealId);
+        if (ok) {
+          await bot.sendMessage(chatId, `🗑 آفر <code>${dealId}</code> با موفقیت حذف گردید.`);
+        } else {
+          await bot.sendMessage(chatId, `⚠️ آفری با شناسه <code>${dealId}</code> یافت نشد.`);
         }
         return;
       }
 
-      // Default response if message is not a command or URL
-      await bot.sendMessage(
-        chatId,
-        '💡 <b>لطفاً لینک ویدیوی مورد نظرتان را ارسال کنید!</b>\n\n' +
-        'پشتیبانی از: اینستاگرام، تیک‌تاک، یوتیوب، توییتر و پینترست.',
-        { reply_markup: getMainMenuMarkup() }
-      );
+      // SMART SEARCH HANDLER (For any normal user text)
+      db.recordSearch(userId);
+      const results = db.searchDeals(text);
+
+      if (results.length === 0) {
+        const noResultText = (
+          `🔍 نتیجه‌ای برای عبارت <b>«${text}»</b> پیدا نشد!\n\n` +
+          `💡 <b>پیشنهاد:</b>\n` +
+          `کلماتی مثل <code>canva</code>، <code>vpn</code>، <code>ویندوز</code>، <code>udemy</code> یا <code>ai</code> را جستجو کنید، یا از طریق منوی زیر تمام آفرهای فعال را مرور نمایید:`
+        );
+        await bot.sendMessage(chatId, noResultText, { reply_markup: getMainMenuMarkup() });
+        return;
+      }
+
+      let searchMsg = `🎯 <b>نتایج جستجو برای: «${text}»</b>\nتعداد موارد یافت‌شده: <b>${results.length}</b>\n\n`;
+      const searchRows = [];
+
+      for (let i = 0; i < Math.min(results.length, 8); i++) {
+        const d = results[i];
+        searchMsg += `${i + 1}. <b>${d.title}</b>\n`;
+        searchRows.push([
+          { text: `👉 ${i + 1}. ${d.title.slice(0, 34)}...`, callback_data: `deal_${d.id}` }
+        ]);
+      }
+
+      searchRows.push([
+        { text: '🗂 مشاهده تمام دسته‌بندی‌ها', callback_data: 'menu_categories' },
+        { text: '🏠 منوی اصلی', callback_data: 'menu_main' }
+      ]);
+
+      await bot.sendMessage(chatId, searchMsg, {
+        reply_markup: { inline_keyboard: searchRows }
+      });
     }
   } catch (err) {
     console.error('Global handleUpdate error:', err);
@@ -638,16 +768,21 @@ async function handleUpdate(update) {
 const server = http.createServer(async (req, res) => {
   const parsedUrl = (req.url || '/').split('?')[0];
 
+  // Health / Status Check Endpoint
   if (req.method === 'GET' && (parsedUrl === '/' || parsedUrl === '/health')) {
+    const stats = db.getStats();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       status: 'online',
-      service: 'RadProtocol Downloader Bot',
-      version: '2.0.0',
+      service: 'RadProtocol Deal & Freebie Hunter Bot',
+      version: '3.0.0',
+      totalUsers: stats.totalUsers,
+      totalDeals: stats.totalDeals,
       uptime: `${Math.floor(process.uptime())}s`
     }));
   }
 
+  // Telegram Webhook Endpoint
   if (req.method === 'POST' && parsedUrl === '/webhook') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -666,13 +801,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // REST API Endpoint to Add Deals Externally & Broadcast Alert
+  if (req.method === 'POST' && parsedUrl === '/api/deal') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        if (payload.secret !== API_SECRET) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ ok: false, error: 'Unauthorized secret' }));
+        }
+
+        if (!payload.title || !payload.category) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ ok: false, error: 'Missing title or category' }));
+        }
+
+        const newDeal = db.addDeal({
+          title: payload.title,
+          category: payload.category,
+          link: payload.link || CHANNEL_LINK,
+          description: payload.description || '',
+          code: payload.code || '',
+          badge: payload.badge || '🔥 جدید',
+          instructions: payload.instructions || 'روی دکمه دریافت کلیک کنید.',
+          tags: payload.tags || []
+        });
+
+        const alerted = await notifySubscribersOfNewDeal(newDeal);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: true, dealId: newDeal.id, subscribersAlerted: alerted }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found');
 });
 
 // Start Service
 server.listen(PORT, async () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`🚀 RadProtocol Deal Hunter Server listening on port ${PORT}`);
 
   const botInfo = await bot.getMe();
   if (botInfo && botInfo.ok) {
@@ -697,9 +871,9 @@ server.listen(PORT, async () => {
   }
 });
 
-// Self-Ping to prevent Render free-tier from sleeping (Pings every 10 minutes)
+// Self-Ping Keep-Alive (Pings every 10 minutes)
 function initKeepAlive(url) {
-  const targetUrl = url.replace(/\/$/, '') + '/';
+  const targetUrl = url.replace(/\/$/, '') + '/health';
   const INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
   console.log(`⏱ Keep-Alive system active: Pinging ${targetUrl} every 10 minutes`);
   setInterval(async () => {

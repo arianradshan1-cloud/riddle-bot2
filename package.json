@@ -1,10 +1,9 @@
 {
-  "name": "rad-media-downloader",
-  "version": "2.0.0",
-  "description": "RadProtocol Telegram Media Downloader Bot with Force-Join & Multi-Platform Support",
+  "name": "radprotocol-deal-hunter-bot",
+  "version": "3.0.0",
+  "description": "RadProtocol Telegram Deal & Freebie Hunter Bot with Force-Join, Category Alerts, and Smart Search",
   "main": "index.js",
   "scripts": {
-    "build": "curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o ./yt-dlp && chmod +x ./yt-dlp || true",
     "start": "node index.js"
   },
   "engines": {
