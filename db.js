@@ -45,6 +45,18 @@ const CATEGORIES = {
 
 const DEFAULT_DEALS = [
   {
+    id: 'deal_udemy_ai_python',
+    title: 'دوره جامع هوش مصنوعی، پایتون و یادگیری ماشین (Udemy)',
+    category: 'udemy',
+    badge: '🎁 کوپن ۱۰۰٪ رایگان',
+    description: 'دوره کامل Learn AI, Python, Machine Learning & Data Science در پلتفرم یودمی با کوپن مستقیم و دائمی همراه با مدرک پایان دوره.',
+    instructions: 'روی لینک زیر کلیک کنید و دکمه Enroll Now را بزنید تا با کوپن اعمال شده به ارزش کامل رایگان به اکانت شما اضافه شود.',
+    code: 'E43B3D626CB574340155',
+    link: 'https://www.udemy.com/course/learn-ai-python-machine-learning-data-science-big-data/?couponCode=E43B3D626CB574340155',
+    date: '2026-09-21',
+    tags: ['udemy', 'یودمی', 'پایتون', 'python', 'ai', 'هوش مصنوعی', 'machine learning', 'یادگیری ماشین', 'data science', 'علم داده', 'کوپن', 'رایگان']
+  },
+  {
     id: 'deal_canva_pro',
     title: 'اشتراک نامحدود Canva Pro (لینک فعال‌سازی تیم رسمی)',
     category: 'design',
