@@ -1,7 +1,12 @@
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const TelegramBot = require('./telegram');
 const downloader = require('./downloader');
 const db = require('./db');
+
+// In-memory cache for interactive YouTube quality selections
+const ytPendingCache = new Map();
 
 // Environment Configuration
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
@@ -163,6 +168,146 @@ async function handleUpdate(update) {
         return;
       }
 
+      // Interactive YouTube quality selection callback
+      if (data.startsWith('yt_')) {
+        const parts = data.split('_');
+        const cacheId = parts[1];
+        const qualityChoice = parts[2];
+        const item = ytPendingCache.get(cacheId);
+
+        if (!item) {
+          await bot.answerCallbackQuery(cq.id, {
+            text: '⚠️ این دکمه منقضی شده است. لطفاً لینک را مجدداً بفرستید.',
+            show_alert: true
+          });
+          return;
+        }
+
+        await bot.answerCallbackQuery(cq.id, { text: '⏳ درخواست شما ثبت شد. در حال پردازش...' });
+
+        if (messageId) {
+          await bot.editMessageText(
+            chatId,
+            messageId,
+            `⏳ <b>در حال دانلود کیفیت انتخابی از یوتیوب...</b>\n\n` +
+            `📹 ${item.title.slice(0, 70)}\n` +
+            `لطفاً چند لحظه تا شروع ارسال به تلگرام صبور باشید.`
+          );
+        }
+
+        const ext = qualityChoice === 'audio' ? 'mp3' : 'mp4';
+        const tmpFile = path.join('/tmp', `yt_${Date.now()}_${qualityChoice}.${ext}`);
+
+        try {
+          const success = await downloader.downloadYouTubeToFile(item.url, qualityChoice, tmpFile);
+
+          if (!success || !fs.existsSync(tmpFile)) {
+            if (messageId) {
+              await bot.editMessageText(
+                chatId,
+                messageId,
+                `❌ <b>خطا در استخراج این کیفیت.</b> می‌توانید از لینک دانلود مستقیم استفاده کنید:`,
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: '📥 دانلود مستقیم ویدیو', url: item.bestUrl || item.url }]
+                    ]
+                  }
+                }
+              );
+            }
+            return;
+          }
+
+          const fileStat = fs.statSync(tmpFile);
+          const sizeMB = (fileStat.size / (1024 * 1024)).toFixed(1);
+
+          // Telegram Bot API limit: 50MB for file uploads
+          if (fileStat.size > 50 * 1024 * 1024) {
+            try { fs.unlinkSync(tmpFile); } catch (e) {}
+            if (messageId) {
+              await bot.editMessageText(
+                chatId,
+                messageId,
+                `⚠️ <b>حجم این فایل (${sizeMB} مگابایت) بیش از سقف مجاز تلگرام (۵۰ مگابایت) است.</b>\n\n` +
+                `برای دانلود با بالاترین سرعت از لینک پرسرعت زیر استفاده کنید:`,
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: '📥 دانلود مستقیم فایل (لینک پرسرعت)', url: item.bestUrl || item.url }]
+                    ]
+                  }
+                }
+              );
+            }
+            return;
+          }
+
+          // Upload to Telegram as playable video or audio
+          if (messageId) {
+            await bot.editMessageText(
+              chatId,
+              messageId,
+              `🚀 <b>دانلود از یوتیوب کامل شد!</b>\nدر حال آپلود و ارسال در تلگرام (${sizeMB} MB)...`
+            );
+          }
+
+          const caption = (
+            `🎬 <b>${item.title.slice(0, 100)}</b>\n\n` +
+            `👤 <b>کانال:</b> ${item.author}\n` +
+            `💾 <b>حجم فایل:</b> ${sizeMB} مگابایت\n\n` +
+            `📢 <b>کانال ما:</b> ${REQUIRED_CHANNEL}\n` +
+            `👥 <b>گروه:</b> ${SUPPORT_GROUP}`
+          );
+
+          let sendRes;
+          if (qualityChoice === 'audio') {
+            sendRes = await bot.sendAudioFile(chatId, tmpFile, {
+              caption: caption,
+              title: item.title,
+              performer: item.author
+            });
+          } else {
+            sendRes = await bot.sendVideoFile(chatId, tmpFile, {
+              caption: caption,
+              supports_streaming: true
+            });
+          }
+
+          if (sendRes && sendRes.ok) {
+            db.recordDownload(userId, 'youtube');
+            if (messageId) {
+              await bot.deleteMessage(chatId, messageId);
+            }
+          } else {
+            if (messageId) {
+              await bot.editMessageText(
+                chatId,
+                messageId,
+                `❌ خطا در ارسال فایل تلگرام: ${sendRes?.description || 'نامشخص'}\nمی‌توانید از لینک زیر مستقیم دانلود کنید:`,
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: '📥 دانلود مستقیم از مرورگر', url: item.bestUrl || item.url }]
+                    ]
+                  }
+                }
+              );
+            }
+          }
+        } catch (err) {
+          console.error('YouTube quality processing error:', err.message);
+          if (messageId) {
+            await bot.editMessageText(chatId, messageId, `❌ در پردازش ویدیو خطایی رخ داد: ${err.message}`);
+          }
+        } finally {
+          try {
+            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+          } catch (e) {}
+        }
+        return;
+      }
+
       // Audio download button for TikTok
       if (data.startsWith('audio_')) {
         const audioUrl = Buffer.from(data.replace('audio_', ''), 'base64').toString('utf-8');
@@ -265,7 +410,78 @@ async function handleUpdate(update) {
       if (urls && urls.length > 0) {
         const targetUrl = urls[0];
 
-        // Send processing status
+        // 1. YouTube Specialized Handler with Interactive Quality Selector
+        if (/(?:youtube\.com|youtu\.be)/i.test(targetUrl)) {
+          const statusMsg = await bot.sendMessage(chatId, '🔍 <b>در حال بررسی کیفیت‌های ویدیوی یوتیوب...</b>');
+          const statusMsgId = statusMsg && statusMsg.ok ? statusMsg.result.message_id : null;
+
+          try {
+            const ytInfo = await downloader.getYouTubeInfo(targetUrl);
+            if (ytInfo && ytInfo.qualities && ytInfo.qualities.length > 0) {
+              const cacheId = Math.random().toString(36).substring(2, 8);
+              ytPendingCache.set(cacheId, {
+                url: targetUrl,
+                title: ytInfo.title,
+                author: ytInfo.author,
+                bestUrl: ytInfo.bestUrl,
+                qualities: ytInfo.qualities,
+                ts: Date.now()
+              });
+
+              // Clean up old entries (>1 hour)
+              const oneHourAgo = Date.now() - 3600000;
+              for (const [k, v] of ytPendingCache.entries()) {
+                if (v.ts < oneHourAgo) ytPendingCache.delete(k);
+              }
+
+              const rows = [];
+              const videoButtons = [];
+              for (const q of ytInfo.qualities) {
+                if (q.id !== 'audio') {
+                  const sizeText = q.sizeMB ? ` (${q.sizeMB} MB)` : '';
+                  videoButtons.push({
+                    text: `🎬 ${q.label}${sizeText}`,
+                    callback_data: `yt_${cacheId}_${q.id}`
+                  });
+                }
+              }
+              if (videoButtons.length > 0) rows.push(videoButtons);
+
+              const audioQ = ytInfo.qualities.find(q => q.id === 'audio');
+              if (audioQ) {
+                const audioSize = audioQ.sizeMB ? ` (${audioQ.sizeMB} MB)` : '';
+                rows.push([
+                  { text: `🎧 دانلود فایل صوتی MP3${audioSize}`, callback_data: `yt_${cacheId}_audio` }
+                ]);
+              }
+
+              rows.push([
+                { text: `📢 کانال ردپروتکل`, url: CHANNEL_LINK },
+                { text: `👥 گروه پشتیبانی`, url: SUPPORT_GROUP }
+              ]);
+
+              const durMin = Math.floor((ytInfo.duration || 0) / 60);
+              const durSec = (ytInfo.duration || 0) % 60;
+              const durText = durMin > 0 ? `${durMin} دقیقه و ${durSec} ثانیه` : `${durSec} ثانیه`;
+
+              const promptText = (
+                `🎬 <b>${ytInfo.title}</b>\n\n` +
+                `👤 <b>کانال:</b> ${ytInfo.author}\n` +
+                `⏱ <b>مدت زمان:</b> ${durText}\n\n` +
+                `👇 <b>کیفیت مورد نظر خود را برای دانلود انتخاب کنید:</b>`
+              );
+
+              await bot.editMessageText(chatId, statusMsgId, promptText, {
+                reply_markup: { inline_keyboard: rows }
+              });
+              return;
+            }
+          } catch (ytErr) {
+            console.warn('YouTube interactive check failed, falling back to direct:', ytErr.message);
+          }
+        }
+
+        // Send processing status for other media or fallback
         const statusMsg = await bot.sendMessage(chatId, '⏳ <b>در حال پردازش و دریافت رسانه... لطفاً چند لحظه صبر کنید.</b>');
         const statusMsgId = statusMsg && statusMsg.ok ? statusMsg.result.message_id : null;
 

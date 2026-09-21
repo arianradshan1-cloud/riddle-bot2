@@ -258,6 +258,96 @@ async function downloadInstagram(url) {
   return null;
 }
 
+// 4. YouTube Downloader & Metadata
+async function getYouTubeInfo(url) {
+  const ytdl = await runYtDlpJson(url);
+  if (!ytdl) return null;
+
+  const title = ytdl.title || 'YouTube Video';
+  const author = ytdl.uploader || 'YouTube';
+  const duration = ytdl.duration || 0;
+  const thumbnail = ytdl.thumbnail || null;
+
+  // Find qualities
+  let qualities = [];
+  if (Array.isArray(ytdl.formats)) {
+    // 720p
+    const f720 = ytdl.formats.find(f => f.height === 720 && f.vcodec !== 'none' && f.acodec !== 'none') ||
+                 ytdl.formats.find(f => f.height === 720 && f.vcodec !== 'none');
+    if (f720) {
+      const sizeMB = f720.filesize || f720.filesize_approx ? ((f720.filesize || f720.filesize_approx) / (1024 * 1024)).toFixed(1) : null;
+      qualities.push({ id: '720', label: '🎬 720p', size: sizeMB ? `${sizeMB} MB` : null, url: f720.url });
+    }
+
+    // 360p / 480p (Standard / fast)
+    const f360 = ytdl.formats.find(f => f.height === 360 && f.vcodec !== 'none' && f.acodec !== 'none') ||
+                 ytdl.formats.find(f => f.format_id === '18') ||
+                 ytdl.formats.find(f => f.height === 360 && f.vcodec !== 'none');
+    if (f360) {
+      const sizeMB = f360.filesize || f360.filesize_approx ? ((f360.filesize || f360.filesize_approx) / (1024 * 1024)).toFixed(1) : null;
+      qualities.push({ id: '360', label: '🎬 360p', size: sizeMB ? `${sizeMB} MB` : null, url: f360.url });
+    }
+
+    // Audio only
+    const fAudio = ytdl.formats.find(f => f.vcodec === 'none' && f.acodec !== 'none');
+    if (fAudio) {
+      const sizeMB = fAudio.filesize || fAudio.filesize_approx ? ((fAudio.filesize || fAudio.filesize_approx) / (1024 * 1024)).toFixed(1) : null;
+      qualities.push({ id: 'audio', label: '🎧 MP3 (صوتی)', size: sizeMB ? `${sizeMB} MB` : null, url: fAudio.url });
+    }
+  }
+
+  // Fallback single stream if no progressive
+  const bestUrl = extractStreamUrl(ytdl);
+
+  return {
+    title,
+    author,
+    duration,
+    thumbnail,
+    qualities,
+    bestUrl
+  };
+}
+
+function downloadYouTubeToFile(url, quality, outPath) {
+  return new Promise((resolve) => {
+    const bin = getYtDlpPath();
+    const cookiePath = getCookieFilePath();
+    const nodeBin = process.execPath || 'node';
+    
+    let formatArg = 'b[ext=mp4]/best[ext=mp4]/best';
+    if (quality === '720') {
+      formatArg = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best';
+    } else if (quality === '360') {
+      formatArg = 'best[height<=360]/18/best';
+    } else if (quality === 'audio') {
+      formatArg = 'bestaudio/best';
+    }
+
+    const args = [
+      '--no-playlist',
+      '--no-warnings',
+      '--socket-timeout', '35',
+      '--js-runtimes', `node:${nodeBin}`,
+      '-f', formatArg,
+      ...(cookiePath ? ['--cookies', cookiePath] : []),
+      '-o', outPath,
+      url
+    ];
+
+    const { execFile } = require('child_process');
+    execFile(bin, args, { timeout: 120000 }, (err, stdout, stderr) => {
+      const fs = require('fs');
+      if (!err && fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+        resolve({ ok: true, path: outPath, size: fs.statSync(outPath).size });
+      } else {
+        console.warn('downloadYouTubeToFile error:', err?.message, stderr?.slice(0, 200));
+        resolve({ ok: false, error: err?.message || 'File download failed' });
+      }
+    });
+  });
+}
+
 // 4. YouTube Downloader (Shorts & Videos)
 async function downloadYouTube(url) {
   // First attempt: yt-dlp with direct extraction
@@ -383,6 +473,8 @@ module.exports = {
   downloadTwitter,
   downloadInstagram,
   downloadYouTube,
+  getYouTubeInfo,
+  downloadYouTubeToFile,
   downloadPinterest,
   getCookieFilePath
 };

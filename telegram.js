@@ -60,6 +60,29 @@ class TelegramBot {
     });
   }
 
+  async sendVideoFile(chatId, filePath, options = {}) {
+    const fs = require('fs');
+    const path = require('path');
+    const url = `${this.baseUrl}/sendVideo`;
+    try {
+      const form = new FormData();
+      form.append('chat_id', chatId);
+      const blob = await fs.openAsBlob(filePath);
+      form.append('video', blob, path.basename(filePath));
+      if (options.caption) form.append('caption', options.caption);
+      if (options.parse_mode) form.append('parse_mode', options.parse_mode);
+      if (options.supports_streaming) form.append('supports_streaming', 'true');
+      if (options.reply_markup) {
+        form.append('reply_markup', typeof options.reply_markup === 'string' ? options.reply_markup : JSON.stringify(options.reply_markup));
+      }
+      const res = await fetch(url, { method: 'POST', body: form });
+      return await res.json();
+    } catch (err) {
+      console.error('sendVideoFile error:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
   async sendAudio(chatId, audioUrl, options = {}) {
     return this.call('sendAudio', {
       chat_id: chatId,
@@ -70,6 +93,30 @@ class TelegramBot {
       parse_mode: options.parse_mode || 'HTML',
       reply_markup: options.reply_markup
     });
+  }
+
+  async sendAudioFile(chatId, filePath, options = {}) {
+    const fs = require('fs');
+    const path = require('path');
+    const url = `${this.baseUrl}/sendAudio`;
+    try {
+      const form = new FormData();
+      form.append('chat_id', chatId);
+      const blob = await fs.openAsBlob(filePath);
+      form.append('audio', blob, path.basename(filePath));
+      if (options.caption) form.append('caption', options.caption);
+      if (options.title) form.append('title', options.title);
+      if (options.performer) form.append('performer', options.performer);
+      if (options.parse_mode) form.append('parse_mode', options.parse_mode);
+      if (options.reply_markup) {
+        form.append('reply_markup', typeof options.reply_markup === 'string' ? options.reply_markup : JSON.stringify(options.reply_markup));
+      }
+      const res = await fetch(url, { method: 'POST', body: form });
+      return await res.json();
+    } catch (err) {
+      console.error('sendAudioFile error:', err.message);
+      return { ok: false, error: err.message };
+    }
   }
 
   async sendMediaGroup(chatId, media) {
