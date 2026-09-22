@@ -58,15 +58,39 @@ const DEFAULT_DEALS = [
   },
   {
     id: 'deal_canva_pro',
-    title: 'اشتراک نامحدود Canva Pro (لینک فعال‌سازی تیم رسمی)',
+    title: 'اشتراک نامحدود Canva Pro و Education (لینک فعال‌سازی تیم رسمی)',
     category: 'design',
     badge: '🔥 ویژه و تضمینی',
-    description: 'دسترسی رایگان و قانونی به تمام امکانات Canva Pro بدون نیاز به مسترکارت و ویزاکارت از طریق اینوایت تیم آموزشی/دانشگاهی.',
-    instructions: '۱. با مرورگر یا اپ وارد حساب عادی Canva خود شوید.\n۲. روی دکمه دریافت زیر بزنید و پذیرش دعوت (Join Team) را کلیک کنید.\n۳. حالا به راحتی به تمام تمپلیت‌ها، ابزارهای AI و دانلود با بالاترین کیفیت دسترسی دارید!',
+    description: 'دسترسی رایگان و قانونی به تمام امکانات Canva Pro بدون نیاز به مسترکارت و ویزاکارت از طریق اینوایت تیم رسمی.',
+    instructions: '۱. با مرورگر یا اپ وارد حساب Canva خود شوید.\n۲. روی لینک فعال‌سازی کلیک کرده و Join Team را بزنید.\n۳. اکنون تمام قابلیت‌های پرمیوم و هوش مصنوعی برای اکانت شما فعال شده است!',
     code: '',
-    link: 'https://t.me/rad_protocol',
+    link: 'https://www.canva.com/brand/join?token=jnqbZ6tufkd9g4PTYW7-xg&referrer=team-invite',
     date: '2026-09-21',
-    tags: ['canva', 'کانوا', 'طراحی', 'گرافیک', 'دیزاین', 'pro', 'ادیت']
+    tags: ['canva', 'کانوا', 'طراحی', 'گرافیک', 'دیزاین', 'pro', 'ادیت', 'پرمیوم', 'تیم']
+  },
+  {
+    id: 'deal_udemy_photoshop',
+    title: 'دوره جامع آموزش نقاشی و طراحی در فتوشاپ (Udemy)',
+    category: 'udemy',
+    badge: '🎨 ۱۰۰٪ رایگان با مدرک',
+    description: 'دوره کامل Learn to Draw with Photoshop در پلتفرم یودمی با کوپن مستقیم رایگان و دسترسی مادام‌العمر.',
+    instructions: 'روی لینک زیر کلیک کنید تا کوپن FREE-PS به طور خودکار اعمال شود و با زدن دکمه Enroll Now دوره را به اکانت خود اضافه کنید.',
+    code: 'FREE-PS',
+    link: 'https://www.udemy.com/course/learn-to-draw-complete-drawing-course/?couponCode=FREE-PS',
+    date: '2026-09-21',
+    tags: ['udemy', 'یودمی', 'photoshop', 'فتوشاپ', 'طراحی', 'نقاشی', 'دیجیتال', 'کوپن']
+  },
+  {
+    id: 'deal_udemy_office',
+    title: 'دوره جامع مسترکلاس مایکروسافت آفیس (اکسل، پاورپوینت و ورد)',
+    category: 'udemy',
+    badge: '📊 ۱۰۰٪ رایگان با مدرک',
+    description: 'دوره جامع آموزش Microsoft Office Master شامل یادگیری صفر تا صد Excel، PowerPoint و Word با لایسنس دائمی آموزشی.',
+    instructions: 'روی لینک زیر کلیک کرده و گزینه Enroll Now را بزنید تا با کوپن ثبت‌شده دوره به صورت رایگان برای همیشه فعال گردد.',
+    code: '394AD278D7785B5E8DB3',
+    link: 'https://www.udemy.com/course/microsoft-office-training-master-excel-powerpoint-word/?couponCode=394AD278D7785B5E8DB3',
+    date: '2026-09-21',
+    tags: ['udemy', 'یودمی', 'office', 'آفیس', 'excel', 'اکسل', 'powerpoint', 'پاورپوینت', 'word', 'ورد', 'کوپن']
   },
   {
     id: 'deal_win_mas',
