@@ -45,6 +45,18 @@ const CATEGORIES = {
 
 const DEFAULT_DEALS = [
   {
+    id: 'deal_genspark_ai_unlimited',
+    title: 'اکانت نامحدود و رایگان Genspark AI (موتور ریسرچ با Claude 3.5 و GPT-4o)',
+    category: 'ai',
+    badge: '🤖 ترفند فعال‌سازی نامحدود',
+    description: 'موتور هوش مصنوعی تحقیقاتی و رقیب قدرتمند Perplexity با پشتیبانی از Claude 3.5 Sonnet و GPT-4o بدون نیاز به شماره یا کردیت کارت.',
+    instructions: '۱. با یک سرویس ایمیل موقت نظیر Smailpro.com ایمیل بسازید.\n۲. در سایت Genspark.ai ثبت‌نام کنید.\n۳. کد دریافتی را وارد نمایید و از ظرفیت کامل تحقیقاتی هوش مصنوعی لذت ببرید!',
+    code: '',
+    link: 'https://www.genspark.ai/',
+    date: '2026-09-22',
+    tags: ['genspark', 'جن‌اسپارک', 'ai', 'هوش مصنوعی', 'perplexity', 'پرپلکسیتی', 'claude', 'gpt', 'تحقیق', 'رایگان']
+  },
+  {
     id: 'deal_udemy_ai_python',
     title: 'دوره جامع هوش مصنوعی، پایتون و یادگیری ماشین (Udemy)',
     category: 'udemy',
