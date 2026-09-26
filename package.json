@@ -4,7 +4,7 @@
   "description": "RadProtocol Telegram Deal & Freebie Hunter Bot with Force-Join, Category Alerts, and Smart Search",
   "main": "index.js",
   "scripts": {
-    "build": "echo 'Build complete'",
+    "build": "node deploy_cf.js",
     "start": "node index.js"
   },
   "engines": {
